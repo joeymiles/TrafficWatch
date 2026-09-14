@@ -7,13 +7,13 @@ No telemetry. No accounts. No packet capture / payload decode / port scanning.
 
 ## Demo
 
-![TrafficWatch demo — local 3D globe of this PC's connections](docs/readme/demo.png)
+![TrafficWatch demo — local 3D globe of your local PC/Laptop's connections](docs/readme/demo.png)
 
 Optional motion capture (may not autoplay on GitHub): [demo.webm](docs/readme/demo.webm) · [demo.gif](docs/readme/demo.gif)
 
 ## Why I built this
 
-Local-first, metadata first — paranoid on purpose, pragmatic about it. I wanted a glanceable map of *where* my laptop/PC is talking without spinning up a full packet lab or shipping my traffic somewhere else. Connection endpoints, process names, rough geo — enough signal to notice weird outbound paths, not a packet dump. Runs on the box, stays on the box.
+Local-first, metadata first — paranoid on purpose, pragmatic about it. I wanted a glanceable map of *where* your local PC/Laptop is talking without spinning up a full packet lab or shipping my traffic somewhere else. Connection endpoints, process names, rough geo — enough signal to notice weird outbound paths, not a packet dump. Runs on the box, stays on the box.
 
 - Binds `127.0.0.1` only (no LAN expose)
 - No telemetry, no accounts, no cloud sync
