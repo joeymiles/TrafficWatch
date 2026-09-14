@@ -1,0 +1,50 @@
+# Python / venv
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local data & secrets
+data/
+.env
+.env.*
+*.token
+*.sqlite
+*.sqlite-*
+
+# Logs / temp
+*.log
+*.err
+*.out
+exports/
+*.bak*
+last-launch-error*
+NOTES.md
+
+# Tools backups / one-off scratch (keep local, do not publish)
+app/tools/ux41_bak/
+app/tools/_ux40_payload/
+app/tools/_*.py
+app/tools/patch_*
+app/tools/fix_*
+app/tools/scrub_*
+app/tools/apply_*
+tools/apply_*
+tools/ux41_bak/
+tools/_ux40_payload/
+tools/_*.py
+tools/patch_*
+tools/fix_*
+tools/scrub_*
+
+# Private / local agent paths (never track)
+/.private/
+**/outbox/**
+
+# Screenshots may contain home location / browser chrome - exclude for public
+shots/
+
+# Restructure scratch helpers
+_restructure_scrub.py
+_patch_*.py

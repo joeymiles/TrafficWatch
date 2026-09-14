@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" sizes="16x16" href="/static/trafficwatch-icon-16.svg?v=icon2" type="image/svg+xml">
+  <link rel="icon" href="/static/trafficwatch-icon.svg?v=icon2" type="image/svg+xml">
+  <link rel="icon" href="/static/trafficwatch.ico?v=icon2" type="image/x-icon">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrafficWatch</title>
+  <!--
+    Vendored local deps (Phase A — no runtime CDN):
+      - /static/vendor/globe.gl.min.js (globe.gl@2.33.2)
+      - /static/vendor/socket.io.min.js (Socket.IO client 4.7.5)
+      - /static/vendor/imgs/* earth textures (night + day blue-marble, local only)
+    Session: HttpOnly SameSite=Strict cookie (never a token in HTML).
+  -->
+  <link rel="stylesheet" href="/static/css/style.css?v=ux48" />
+</head>
+<body>
+  <!-- In-app splash: visible ASAP; dismissed on first live snapshot (desktop early window uses a separate pre-Flask splash). -->
+  <div id="boot-splash" class="boot-splash" role="status" aria-live="polite">
+    <div class="boot-card">
+      <div class="boot-logo">◈</div>
+      <h1 id="boot-title">TrafficWatch is starting…</h1>
+      <p id="boot-sub">Loading connections &amp; GeoIP…</p>
+      <p class="tw-motto muted" id="boot-motto">local-first, metadata first — paranoid on purpose, pragmatic about it.</p>
+      <div class="boot-spin" aria-hidden="true"></div>
+    </div>
+  </div>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">◈</span>
+        <div>
+          <h1>TrafficWatch</h1>
+          <p class="tag">Local 3D globe · this PC</p>
+        </div>
+      </div>
+      <div class="stats" id="stats">
+        <span class="chip rates-chip" id="chip-rates" title="System NIC rates">↓<span id="stat-sys-in">—</span> ↑<span id="stat-sys-out">—</span></span>
+      </div>
+      <div class="filters">
+        <input type="search" id="filter-process" placeholder="Process / PID…" />
+        <input type="search" id="filter-country" placeholder="Country / city…" />
+        <input type="search" id="filter-port" placeholder="Port…" inputmode="numeric" />
+        <label class="check"><input type="checkbox" id="filter-established" checked /> Established</label>
+        <label class="check"><input type="checkbox" id="filter-mapped" /> Mapped</label>
+        <label class="check"><input type="checkbox" id="filter-hide-private" checked /> Hide private</label>
+        <div class="dir-filter" id="dir-filter" role="group" aria-label="Direction filter">
+          <button type="button" class="dir-f active" data-dir="all" title="All directions">All</button>
+          <button type="button" class="dir-f" data-dir="outbound" title="Outbound only">Out</button>
+          <button type="button" class="dir-f" data-dir="inbound" title="Inbound only">In</button>
+          <button type="button" class="dir-f" data-dir="listen" title="Listening only">Listen</button>
+        </div>
+        <button type="button" class="btn" id="btn-weekly" title="Weekly summary (last 7 days)">Weekly</button>
+        <button type="button" class="btn" id="btn-intel" title="View local threat-intel matches">Intel</button>
+        <button type="button" class="btn" id="btn-export" title="Export current snapshot CSV">CSV</button>
+        <div class="settings-wrap" id="settings-wrap">
+          <button type="button" class="btn" id="btn-settings" title="View settings" aria-expanded="false" aria-controls="settings-pop">Settings</button>
+          <div class="settings-pop hidden" id="settings-pop" role="menu" hidden>
+            <div class="settings-section">
+              <div class="settings-label">Layout</div>
+              <button type="button" class="btn" id="btn-layout" title="Switch to list-first (smaller globe)">List-first</button>
+            </div>
+            <div class="settings-section">
+              <div class="settings-label">Globe</div>
+              <div class="globe-mode" id="globe-mode" role="group" aria-label="Globe lighting">
+                <button type="button" data-mode="night" title="Night texture">Night</button>
+                <button type="button" data-mode="daynight" class="active" title="Day and night by sun position">Day-night</button>
+                <button type="button" data-mode="day" title="Day texture">Day</button>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-label">Home</div>
+              <button type="button" class="btn" id="btn-home" title="Set home lat/lon">Home</button>
+            </div>
+            <div class="settings-section">
+              <div class="settings-label">Live DNS</div>
+              <button type="button" class="btn" id="btn-enable-dns" title="Start elevated helper (UAC once)">Enable live DNS (admin)</button>
+            </div>
+            <div class="settings-section">
+              <div class="settings-label">Privacy</div>
+              <button type="button" class="btn" id="btn-clear-history" title="Delete persisted history on this PC">Clear history</button>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn danger" id="btn-quit" title="Quit TrafficWatch and stop the backend">Quit</button>
+      </div>
+    </header>
+    <div id="status-banner" class="status-banner verdict-clear" role="status" aria-live="polite">
+      <span class="verdict-dot" aria-hidden="true"></span>
+      <strong id="status-verdict">Clear</strong>
+      <span id="status-verdict-detail" class="verdict-detail">No intel hits or high signals</span>
+    </div>
+    <div id="filter-hint" class="filter-hint hidden" role="status"></div>
+    <div id="home-panel" class="home-panel hidden">
+      <label>Lat <input type="number" id="home-lat" step="0.0001" /></label>
+      <label>Lon <input type="number" id="home-lon" step="0.0001" /></label>
+      <label>Label <input type="text" id="home-label-input" placeholder="Custom home" /></label>
+      <button type="button" class="btn primary" id="home-save">Save</button>
+      <button type="button" class="btn" id="home-detect" title="Optional: look up this PC public IP (off by default)">Detect public IP</button>
+      <button type="button" class="btn" id="home-reset">Reset</button>
+      <button type="button" class="btn ghost" id="home-close">Close</button>
+    </div>
+    <main class="layout" id="main-layout">
+      <section class="map-pane">
+        <div id="globe"></div>
+        <div class="map-legend">
+          <span><i class="swatch out"></i> Outbound</span>
+          <span><i class="swatch in"></i> Inbound</span>
+          <span><i class="swatch listen"></i> Listen</span>
+          <span><i class="swatch intel"></i> Intel hit</span>
+          <span id="home-label">Home: …</span>
+          <span class="hint">drag · scroll zoom · click arc</span>
+          <label class="check globe-spin" title="Auto-spin globe"><input type="checkbox" id="btn-spin" checked /> Spin</label>
+        </div>
+      </section>
+      <aside class="list-pane" id="list-pane">
+        <div class="sidebar-resizer" id="sidebar-resizer" title="Drag to resize"></div>
+        <div class="list-head" id="list-head">
+          <button type="button" class="accordion-toggle" id="sidebar-toggle" aria-expanded="true" title="Collapse / expand Live connections panel">
+            <span class="acc-chevron" aria-hidden="true">▾</span>
+            <h2>Live connections</h2>
+          </button>
+          <div class="list-head-actions">
+            <button type="button" class="proc-fold-btn" id="proc-fold-all" title="Expand or collapse all process groups" aria-expanded="true">Collapse all</button>
+            <button type="button" class="proc-fold-btn" id="btn-clear-focus" title="Show all traffic on globe" hidden>Clear</button>
+            <span id="list-meta"></span>
+          </div>
+        </div>
+        <div class="list-tabs" id="list-tabs" role="tablist">
+          <button type="button" class="list-tab active" id="tab-live" role="tab" aria-selected="true" data-tab="live">Live</button>
+          <button type="button" class="list-tab" id="tab-alerts" role="tab" aria-selected="false" data-tab="alerts">Alerts <span class="tab-count" id="alert-count">0</span></button>
+          <button type="button" class="list-tab" id="tab-status" role="tab" aria-selected="false" data-tab="status">Status</button>
+        </div>
+        <div class="list-body" id="list-body">
+          <div class="table-wrap" id="conn-list" role="tabpanel" data-panel="live">
+            <!-- Process-grouped accordion rows rendered by app.js -->
+          </div>
+          <div class="table-wrap alerts-wrap hidden" id="alerts-list" role="tabpanel" data-panel="alerts" hidden>
+            <!-- Actionable alerts rendered by app.js -->
+          </div>
+          <div class="table-wrap status-wrap hidden" id="status-panel" role="tabpanel" data-panel="status" hidden>
+            <p class="status-empty" id="status-empty">Waiting for live snapshot…</p>
+            <div class="status-sections hidden" id="status-sections">
+              <p class="tw-motto muted status-motto" id="status-motto">local-first, metadata first — paranoid on purpose, pragmatic about it.</p>
+              <section class="status-section">
+                <h3 class="status-h">Live link</h3>
+                <span id="stat-status" class="pill status-pill">connecting…</span>
+              </section>
+              <section class="status-section">
+                <h3 class="status-h">Connections</h3>
+                <span class="chip status-chip" id="chip-count" title="Connection counts"><span id="stat-count">—</span> conns</span>
+                <span class="chip status-chip" id="chip-mapped"><span id="stat-mapped">—</span> arcs</span>
+              </section>
+              <section class="status-section">
+                <h3 class="status-h">Top talkers</h3>
+                <span class="chip talkers status-chip" id="chip-talkers" title="Top talkers">talkers: —</span>
+              </section>
+              <section class="status-section">
+                <h3 class="status-h">Intel &amp; history</h3>
+                <span class="chip status-chip" id="chip-intel" title="Threat-intel hits (local lists)">intel: —</span>
+                <span class="chip status-chip" id="chip-dns" title="Windows DNS-Client log visibility">DNS log: …</span>
+                <span class="chip status-chip" id="chip-history" title="Persisted first-seen history">hist: —</span>
+                <span class="chip status-chip" id="chip-netctx" title="Network context">net: —</span>
+                <span class="chip status-chip" id="chip-ipinfo" title="IPinfo Lite ASN">ASN: —</span>
+                <div class="status-net-trust" id="status-net-trust">
+                  <span class="muted">This network:</span>
+                  <button type="button" class="btn btn-xs" id="net-trust-trusted">Trusted</button>
+                  <button type="button" class="btn btn-xs" id="net-trust-untrusted">Untrusted</button>
+                  <span class="muted" id="net-trust-label"></span>
+                </div>
+                <p class="muted" id="ipinfo-attr" style="margin-top:0.4rem;font-size:0.8rem">ASN data: IPinfo Lite (CC BY-SA 4.0) when token/MMDB present.</p>
+                <span class="chip status-chip" id="chip-baseline" title="Per-program baseline (Review 3 Step 3)">baseline: learning</span>
+              </section>
+              <section class="status-section" id="status-dns-section">
+                <h3 class="status-h">Live DNS</h3>
+                <span class="chip status-chip" id="chip-helper" title="Elevated DNS helper">Live DNS: not running</span>
+                <div class="dns-recent" id="dns-recent">
+                  <table class="dns-table" id="dns-table">
+                    <thead>
+                      <tr><th>Time</th><th>Process</th><th>Query</th><th>Result</th></tr>
+                    </thead>
+                    <tbody id="dns-recent-body"></tbody>
+                  </table>
+                  <p class="muted dns-empty" id="dns-empty">No recent DNS queries.</p>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+    <div id="tw-tooltip" class="tw-tooltip hidden" role="tooltip"></div>
+    <div id="inspect-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card inspect-card">
+        <header class="modal-head">
+          <h2 id="inspect-title">Process</h2>
+          <button type="button" class="btn ghost" id="inspect-close">Close</button>
+        </header>
+        <div id="inspect-body" class="modal-body"></div>
+        <footer class="modal-foot">
+          <button type="button" class="btn danger" id="inspect-kill">Kill process…</button>
+          <button type="button" class="btn danger" id="inspect-kill-force">Force kill…</button>
+          <button type="button" class="btn warn" id="inspect-fw-block" title="Block a remote IP via Windows Firewall">Block IP…</button>
+        </footer>
+      </div>
+    </div>
+    <div id="kill-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card kill-card">
+        <header class="modal-head">
+          <h2>Confirm terminate</h2>
+          <button type="button" class="btn ghost" id="kill-cancel">Cancel</button>
+        </header>
+        <div class="modal-body">
+          <p id="kill-warn" class="kill-warn"></p>
+          <p>Type the process name to confirm:</p>
+          <p class="kill-target"><strong id="kill-name" class="copy-value"></strong> <button type="button" class="btn btn-xs" id="kill-name-copy" title="Copy process name">Copy</button> · PID <strong id="kill-pid"></strong></p>
+          <input type="text" id="kill-confirm-input" placeholder="Process name" autocomplete="off" />
+          <p id="kill-error" class="kill-error hidden"></p>
+        </div>
+        <footer class="modal-foot">
+          <button type="button" class="btn danger" id="kill-confirm-btn">Terminate</button>
+        </footer>
+      </div>
+    </div>
+    <div id="fw-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card kill-card">
+        <header class="modal-head">
+          <h2 id="fw-title">Confirm firewall block</h2>
+          <button type="button" class="btn ghost" id="fw-cancel">Cancel</button>
+        </header>
+        <div class="modal-body">
+          <p id="fw-warn" class="kill-warn">
+            This creates a <strong>local Windows Firewall</strong> outbound (and inbound) block rule
+            named <code>TrafficWatch-block-out-&lt;ip&gt;</code> / <code>TrafficWatch-block-in-&lt;ip&gt;</code>.
+            It does <strong>not</strong> enable a default-deny policy — only this explicit IP.
+          </p>
+          <p>Undo: use Unblock here, or <code>Remove-NetFirewallRule -DisplayName 'TrafficWatch-block-*'</code> in an elevated PowerShell.</p>
+          <p class="kill-target">IP: <strong id="fw-ip" class="copy-value"></strong> <button type="button" class="btn btn-xs" id="fw-ip-copy" title="Copy IP">Copy</button></p>
+          <p id="fw-proc-wrap" class="kill-target hidden">Process: <strong id="fw-proc"></strong></p>
+          <p id="fw-confirm-hint">IP is prefilled — click Create block rule, or edit then confirm:</p>
+          <input type="text" id="fw-confirm-input" placeholder="x.x.x.x" autocomplete="off" />
+          <p id="fw-error" class="kill-error hidden"></p>
+        </div>
+        <footer class="modal-foot">
+          <button type="button" class="btn" id="fw-unblock-btn">Unblock instead</button>
+          <button type="button" class="btn warn" id="fw-timed-btn" title="Temporary block; rule self-expires">Block for 10 minutes</button>
+          <button type="button" class="btn danger" id="fw-confirm-btn">Create block rule</button>
+        </footer>
+      </div>
+    </div>
+    
+    <div id="alert-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card alert-detail-card">
+        <header class="modal-head">
+          <h2 id="alert-modal-title">Alert</h2>
+          <button type="button" class="btn ghost" id="alert-modal-close">Close</button>
+        </header>
+        <div id="alert-modal-body" class="modal-body"></div>
+        <footer class="modal-foot alert-modal-foot">
+          <button type="button" class="btn" id="alert-act-ack">Acknowledge</button>
+          <button type="button" class="btn" id="alert-act-mute">Mute</button>
+          <button type="button" class="btn" id="alert-act-inspect">Inspect</button>
+          <button type="button" class="btn" id="alert-act-globe">Show on globe</button>
+          <button type="button" class="btn warn" id="alert-act-block-ip">Block this IP</button>
+          <button type="button" class="btn warn" id="alert-act-block-proc">Block for this process</button>
+          <button type="button" class="btn" id="alert-act-copy-all">Copy all</button>
+        </footer>
+      </div>
+    </div>
+
+    <div id="intel-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card intel-card">
+        <header class="modal-head">
+          <div class="intel-head-text">
+            <h2 id="intel-modal-title">Threat intel</h2>
+            <p class="intel-sub muted">Local list matches on remotes — not packet capture, not VirusTotal.</p>
+          </div>
+          <button type="button" class="btn ghost" id="intel-modal-close">Close</button>
+        </header>
+        <div id="intel-modal-body" class="modal-body">
+          <div id="intel-status-strip" class="intel-status-strip" aria-live="polite">Loading…</div>
+          <h3 class="intel-hits-h">Current snapshot hits</h3>
+          <div id="intel-hits" class="intel-hits"></div>
+        </div>
+        <footer class="modal-foot intel-modal-foot">
+          <button type="button" class="btn" id="intel-open-cache" title="Open local intel cache folder">Open cache</button>
+          <button type="button" class="btn primary" id="intel-refresh">Refresh</button>
+        </footer>
+      </div>
+    </div>
+
+    <div id="weekly-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card weekly-card">
+        <header class="modal-head">
+          <h2>Weekly summary</h2>
+          <button type="button" class="btn ghost" id="weekly-close">Close</button>
+        </header>
+        <div id="weekly-body" class="modal-body">Loading.</div>
+      </div>
+    </div>
+    <div id="guide-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card guide-card">
+        <header class="modal-head">
+          <h2>Welcome to TrafficWatch</h2>
+          <button type="button" class="btn ghost" id="guide-skip">Skip</button>
+        </header>
+        <div class="modal-body" id="guide-body">
+          <ol class="guide-steps" id="guide-steps">
+            <li data-step="0" class="active"><strong>Local only.</strong> TrafficWatch binds 127.0.0.1 — your data stays on this PC.</li>
+            <li data-step="1"><strong>Day / night globe.</strong> Use Night, Day-night, or Day under Settings; labels stay off for a clean map.</li>
+            <li data-step="2"><strong>Alerts &amp; Status.</strong> Actionable intel hits land under Alerts; Status holds conn counts and system chips. Live stays the full list.</li>
+            <li data-step="3"><strong>Inspect &amp; Block.</strong> Open an alert or Live row for detail; Block is one-click from the known IP/process. Typed confirm remains for Kill only.</li>
+            <li data-step="4"><strong>Baseline learning.</strong> Per-program baseline learns ~7 days (and enough samples), then ready — departures and exfil-ish show as alerts.</li>
+            <li data-step="5"><strong>Direction filter.</strong> All / Out / In / Listen; inbound from public IPs is highlighted.</li>
+          </ol>
+          <p class="guide-progress"><span id="guide-step-num">1</span> / 6</p>
+          <p class="tw-motto muted guide-motto" id="guide-motto">local-first, metadata first — paranoid on purpose, pragmatic about it.</p>
+        </div>
+        <footer class="modal-foot">
+          <button type="button" class="btn" id="guide-back">Back</button>
+          <button type="button" class="btn primary" id="guide-next">Next</button>
+        </footer>
+      </div>
+    </div>
+    <div id="tw-toasts" class="tw-toasts" aria-live="polite" aria-relevant="additions"></div>
+  </div>
+  <script src="/static/js/boot.js?v=ux48"></script>
+  <script src="/static/vendor/globe.gl.min.js"></script>
+  <script src="/static/js/map.js?v=ux48"></script>
+  <script src="/static/vendor/socket.io.min.js"></script>
+  <script src="/static/js/app.js?v=ux48"></script>
+</body>
+</html>
