@@ -1,6 +1,6 @@
 # TrafficWatch
 
-Local-only live **3D globe** of where your PC's TCP/UDP traffic is routing (inbound/outbound). Dark UI with globe.gl arcs and a live connection list — not Wireshark/Nmap.
+Local-only live **3D globe** of where your local PC/Laptop's TCP/UDP traffic is routing (inbound/outbound). Dark UI with globe.gl arcs and a live connection list — not Wireshark/Nmap.
 
 **Bind:** `127.0.0.1` only | **Default port:** `8767` | **Shell:** pywebview desktop  
 No telemetry. No accounts. No packet capture / payload decode / port scanning.
