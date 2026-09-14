@@ -1,6 +1,6 @@
 # TrafficWatch
 
-Local-only live **3D globe** of where this PC's TCP/UDP traffic is routing (inbound/outbound). Dark UI with globe.gl arcs and a live connection list — not Wireshark/Nmap.
+Local-only live **3D globe** of where your PC's TCP/UDP traffic is routing (inbound/outbound). Dark UI with globe.gl arcs and a live connection list — not Wireshark/Nmap.
 
 **Bind:** `127.0.0.1` only | **Default port:** `8767` | **Shell:** pywebview desktop  
 No telemetry. No accounts. No packet capture / payload decode / port scanning.
@@ -13,7 +13,7 @@ If the embed does not play: [demo.webm](docs/readme/demo.webm) · [demo.gif](doc
 
 ## Why I built this
 
-Local-first, metadata first — paranoid on purpose, pragmatic about it. I wanted a glanceable map of *where* this machine is talking without spinning up a full packet lab or shipping my traffic somewhere else. Connection endpoints, process names, rough geo — enough signal to notice weird outbound paths, not a packet dump. Runs on the box, stays on the box.
+Local-first, metadata first — paranoid on purpose, pragmatic about it. I wanted a glanceable map of *where* my laptop/PC is talking without spinning up a full packet lab or shipping my traffic somewhere else. Connection endpoints, process names, rough geo — enough signal to notice weird outbound paths, not a packet dump. Runs on the box, stays on the box.
 
 ## Security
 
