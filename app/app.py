@@ -1667,6 +1667,7 @@ def main() -> None:
             flush=True,
         )
         raise SystemExit(2)
+    applog.write_pid_file()
 
     print("TrafficWatch starting.")
     print(f"  Binding {args.host}:{args.port} (localhost only)")

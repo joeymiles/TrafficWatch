@@ -124,3 +124,35 @@ def install() -> str | None:
         _installed = True
         logging.getLogger("tw").info("TrafficWatch log started (pid %s)", os.getpid())
         return LOG_PATH
+
+
+PID_PATH = os.path.join(_DATA_DIR, "app.pid")
+
+
+def write_pid_file() -> None:
+    """Record this app process for the uninstaller (the launcher starts desktop.py by relative path,
+    so its command line does not contain the install folder)."""
+    import atexit
+    import json
+
+    try:
+        os.makedirs(_DATA_DIR, exist_ok=True)
+        with open(PID_PATH, "w", encoding="ascii") as f:
+            json.dump({"pid": os.getpid(), "exe": sys.executable}, f)
+    except Exception as exc:
+        logging.getLogger("tw").warning("pid file not written: %s", exc)
+        return
+
+    atexit.register(remove_pid_file)
+
+
+def remove_pid_file() -> None:
+    """Delete app.pid only if it still names this process."""
+    import json
+
+    try:
+        with open(PID_PATH, encoding="ascii") as f:
+            if json.load(f).get("pid") == os.getpid():
+                os.remove(PID_PATH)
+    except Exception:
+        pass

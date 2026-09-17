@@ -306,6 +306,12 @@ def hard_exit(code: int = 0) -> None:
         socketio.stop()
     except Exception:
         pass
+    # os._exit skips atexit, so drop our pid record here.
+    try:
+        import applog
+        applog.remove_pid_file()
+    except Exception:
+        pass
     # Daemon Flask/Werkzeug threads may ignore soft stop; force-exit frees :8767.
     os._exit(code)
 
@@ -604,6 +610,7 @@ def main() -> None:
             "Exiting this launch."
         )
         raise SystemExit(0)
+    applog.write_pid_file()
 
     # Backup: port already serving (stale mutex-less peer).
     peer = _health_peer()

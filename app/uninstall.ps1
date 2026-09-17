@@ -10,9 +10,13 @@
 # default-off link to Windows Settings because other apps share it.
 #
 # -DryRun: show what would happen, change nothing, no elevation.
+# -Quiet: no dialogs; deletes data and (non-git) folder with default options. For scripted/test use.
+# -NoElevate: do not relaunch as admin; admin-only steps are attempted and reported if they fail.
 
 param(
   [switch]$DryRun,
+  [switch]$Quiet,
+  [switch]$NoElevate,
   [switch]$Elevated
 )
 
@@ -125,10 +129,23 @@ function Show-Options {
 function Stop-TrafficWatch {
   # Trailing backslash so a sibling folder like TrafficWatch-wt-x never matches.
   $rootLower = ($Root.TrimEnd('\') + '\').ToLowerInvariant()
+  $venvLower = ($VenvDir.TrimEnd('\') + '\').ToLowerInvariant()
+  # start.ps1 launches "pythonw desktop.py" with a relative path, so the folder is often not in
+  # the command line. Also match our .venv interpreter, and the pid the app recorded in data\app.pid.
+  $recordedPid = 0
+  $pidFile = Join-Path $DataDir 'app.pid'
+  if (Test-Path -LiteralPath $pidFile) {
+    try { $recordedPid = [int]((Get-Content -Raw -LiteralPath $pidFile | ConvertFrom-Json).pid) } catch { $recordedPid = 0 }
+  }
   $procs = @(Get-CimInstance Win32_Process | Where-Object {
-      $_.ProcessId -ne $PID -and $_.CommandLine -and
-      $_.CommandLine.ToLowerInvariant().Contains($rootLower) -and
-      ($_.CommandLine -match '(?i)(desktop\.py|app\.py|tw_helper\.ps1)')
+      $cl = [string]$_.CommandLine
+      $exe = ([string]$_.ExecutablePath).ToLowerInvariant()
+      $isOurScript = $cl -match '(?i)(desktop\.py|app\.py|tw_helper\.ps1)'
+      $_.ProcessId -ne $PID -and $isOurScript -and (
+        $cl.ToLowerInvariant().Contains($rootLower) -or
+        $exe.StartsWith($venvLower) -or
+        ($recordedPid -gt 0 -and [int]$_.ProcessId -eq $recordedPid -and $exe -match 'python')
+      )
     })
   if (-not $procs.Count) { Note 'No running TrafficWatch processes from this folder.'; return }
   foreach ($p in $procs) {
@@ -240,7 +257,7 @@ function Remove-Dir([string]$Path, [string]$Label) {
 # --- main ---
 try {
   Assert-SafeRoot
-  if (-not $DryRun -and -not (Test-Admin)) {
+  if (-not $DryRun -and -not $NoElevate -and -not (Test-Admin)) {
     # Firewall rules and audit policy need admin. Relaunch elevated (one UAC prompt).
     $args2 = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`" -Elevated"
     try {
@@ -252,7 +269,7 @@ try {
     exit 0
   }
 
-  if ($DryRun) {
+  if ($DryRun -or $Quiet) {
     $opts = @{ DeleteData = $true; RemoveFolder = -not (Test-Path (Join-Path $Root '.git')); OpenApps = $false }
   } else {
     $opts = Show-Options
@@ -279,7 +296,7 @@ try {
   }
   Note 'Done.'
   [System.IO.File]::WriteAllLines($LogFile, $script:Report)
-  if (-not $DryRun) {
+  if (-not $DryRun -and -not $Quiet) {
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.MessageBox]::Show(("TrafficWatch was uninstalled.`r`n`r`n" + ($script:Report -join "`r`n")), 'Uninstall TrafficWatch') | Out-Null
   }
@@ -289,7 +306,7 @@ try {
   $script:Report.Add("ERROR: $msg")
   try { [System.IO.File]::WriteAllLines($LogFile, $script:Report) } catch {}
   Write-Host "ERROR: $msg"
-  if (-not $DryRun) {
+  if (-not $DryRun -and -not $Quiet) {
     try {
       Add-Type -AssemblyName System.Windows.Forms
       [System.Windows.Forms.MessageBox]::Show("Uninstall stopped: $msg`r`nDetails: $LogFile", 'Uninstall TrafficWatch') | Out-Null
