@@ -42,6 +42,7 @@ function Assert-SafeRoot {
   $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
   $bad = @([System.IO.Path]::GetPathRoot($full).TrimEnd('\'), $env:USERPROFILE.TrimEnd('\'), $env:SystemRoot.TrimEnd('\'), [Environment]::GetFolderPath('Desktop').TrimEnd('\'))
   if (-not $ok -or ($bad -contains $full)) { throw "Refusing to uninstall: $Root does not look like a TrafficWatch folder." }
+  if ((Test-Reparse $Root) -or (Test-Reparse $AppDir)) { throw "Refusing to uninstall: $Root or its app folder is a link; run the uninstaller from the real folder." }
 }
 
 function Show-Options {
@@ -154,7 +155,8 @@ function Restore-SystemSettings {
     Note 'No system_baseline.json: TrafficWatch has no recorded setting changes to undo. (Installs older than this uninstaller did not record them; the DNS-Client Operational log may still be on - harmless, and can be turned off in Event Viewer.)'
     return
   }
-  $b = (Get-Content -Raw -Path $path) | ConvertFrom-Json
+  # data\ is user-writable; values only ever select between fixed on/off actions below.
+  $b = (Get-Content -Raw -LiteralPath $path) | ConvertFrom-Json
   foreach ($pair in @(@('dns_client_operational', 'Microsoft-Windows-DNS-Client/Operational'), @('kernel_network_analytic', 'Microsoft-Windows-Kernel-Network/Analytic'))) {
     $val = $b.($pair[0])
     if ($val -eq 'disabled') {
@@ -194,11 +196,44 @@ function Remove-Shortcut {
   if (-not $DryRun) { Remove-Item -LiteralPath $lnk -Force }
 }
 
+function Test-Reparse([string]$Path) {
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  return ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint))
+}
+
+function Remove-TreeNoFollow([string]$Path) {
+  # This runs elevated: never traverse junctions/symlinks. A link is removed as a link;
+  # its target is left untouched. Plain files and folders are removed bottom-up.
+  $failed = 0
+  foreach ($child in @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue)) {
+    $isLink = [bool]($child.Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+    try {
+      if ($child.PSIsContainer -and $isLink) {
+        [System.IO.Directory]::Delete($child.FullName, $false)
+      } elseif ($child.PSIsContainer) {
+        $failed += Remove-TreeNoFollow $child.FullName
+        [System.IO.Directory]::Delete($child.FullName, $false)
+      } else {
+        $child.Attributes = [System.IO.FileAttributes]::Normal
+        [System.IO.File]::Delete($child.FullName)
+      }
+    } catch { $failed++ }
+  }
+  return $failed
+}
+
 function Remove-Dir([string]$Path, [string]$Label) {
-  if (-not (Test-Path $Path)) { Note "No $Label."; return }
+  if (-not (Test-Path -LiteralPath $Path)) { Note "No $Label."; return }
+  if (Test-Reparse $Path) {
+    Note "$Label ($Path) is a link to somewhere else; removing only the link."
+    if (-not $DryRun) { try { [System.IO.Directory]::Delete($Path, $false) } catch { Note ("  failed: {0}" -f $_.Exception.Message) } }
+    return
+  }
   Note "Delete $Label ($Path)"
   if (-not $DryRun) {
-    try { Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop } catch { Note ("  some files could not be deleted: {0}" -f $_.Exception.Message) }
+    $failed = Remove-TreeNoFollow $Path
+    try { [System.IO.Directory]::Delete($Path, $false) } catch { $failed++ }
+    if ($failed) { Note ("  {0} item(s) could not be deleted (in use?)" -f $failed) }
   }
 }
 
