@@ -2731,6 +2731,25 @@
     homePanel.classList.add("hidden");
   });
 
+  document.getElementById("btn-uninstall")?.addEventListener("click", async () => {
+    const yes = await twConfirm(
+      "Uninstall TrafficWatch",
+      "Open the uninstaller? It asks for admin approval, lets you choose whether to delete your data, and closes TrafficWatch when it runs. Nothing is removed until you confirm there.",
+      "Open uninstaller"
+    );
+    if (!yes) return;
+    try {
+      const r = await twFetch("/api/uninstall", { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) {
+        showToast("Uninstaller opened", "Follow the Uninstall TrafficWatch window (it may be behind this one).", { key: "uninstall|" + Date.now(), sev: "info", ttl: 8000 });
+      } else {
+        showToast("Uninstall failed", (j && j.error) || "could not start the uninstaller", { key: "uninstall-fail|" + Date.now(), ttl: 8000 });
+      }
+    } catch (_) {
+      showToast("Uninstall failed", "request failed", { key: "uninstall-fail|" + Date.now(), ttl: 8000 });
+    }
+  });
   const btnQuit = document.getElementById("btn-quit");
   if (btnQuit) {
     async function doQuit() {

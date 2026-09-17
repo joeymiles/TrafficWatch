@@ -748,6 +748,33 @@ def api_quit():
     return jsonify({"ok": True})
 
 
+@app.route("/api/uninstall", methods=["POST"])
+@require_mutate_auth
+def api_uninstall():
+    """Windows desktop only: launch app/uninstall.ps1 (it asks, elevates, warns before deleting data, and stops the app)."""
+    if not _runtime.get("desktop"):
+        return jsonify({"ok": False, "error": "uninstall only available in desktop mode"}), 403
+    if not sys.platform.startswith("win"):
+        return jsonify({"ok": False, "error": "uninstall script is Windows-only"}), 400
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uninstall.ps1")
+    if not os.path.isfile(script):
+        return jsonify({"ok": False, "error": "uninstall.ps1 missing"}), 500
+    ps = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+    try:
+        subprocess.Popen(
+            [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script],
+            env=firewall.clean_ps51_env(),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0),
+            close_fds=True,
+        )
+    except OSError as exc:
+        print(f"  Uninstall launch failed: {exc}", flush=True)
+        return jsonify({"ok": False, "error": "could not start uninstaller"}), 500
+    # The uninstaller stops this app itself, only after the user confirms in its window.
+    print("  Uninstall launched", flush=True)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/desktop/show", methods=["POST"])
 @require_host_only
 def api_desktop_show():
