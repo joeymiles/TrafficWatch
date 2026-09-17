@@ -292,6 +292,12 @@ def wait_ready(timeout: float = 45.0) -> bool:
 
 def hard_exit(code: int = 0) -> None:
     """Stop poll loop and kill the process so the port is always released."""
+    # os._exit skips atexit, so drop our pid record first (tray/socketio stop below can end the process early).
+    try:
+        import applog
+        applog.remove_pid_file()
+    except Exception:
+        pass
     _runtime["running"] = False
     global _tray_icon
     with _tray_lock:
@@ -304,12 +310,6 @@ def hard_exit(code: int = 0) -> None:
             pass
     try:
         socketio.stop()
-    except Exception:
-        pass
-    # os._exit skips atexit, so drop our pid record here.
-    try:
-        import applog
-        applog.remove_pid_file()
     except Exception:
         pass
     # Daemon Flask/Werkzeug threads may ignore soft stop; force-exit frees :8767.

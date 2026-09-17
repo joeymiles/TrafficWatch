@@ -152,7 +152,9 @@ def remove_pid_file() -> None:
 
     try:
         with open(PID_PATH, encoding="ascii") as f:
-            if json.load(f).get("pid") == os.getpid():
-                os.remove(PID_PATH)
+            owner = json.load(f).get("pid")
+        # Close before deleting: Windows cannot remove an open file.
+        if owner == os.getpid():
+            os.remove(PID_PATH)
     except Exception:
         pass
