@@ -140,7 +140,8 @@ function Stop-TrafficWatch {
   $procs = @(Get-CimInstance Win32_Process | Where-Object {
       $cl = [string]$_.CommandLine
       $exe = ([string]$_.ExecutablePath).ToLowerInvariant()
-      $isOurScript = $cl -match '(?i)(desktop\.py|app\.py|tw_helper\.ps1)'
+      $isOurScript = ($cl -match '(?i)(desktop\.py|app\.py|tw_helper\.ps1)') -or
+        (($_.Name -eq 'msedgewebview2.exe') -and $cl.ToLowerInvariant().Contains($rootLower))
       $_.ProcessId -ne $PID -and $isOurScript -and (
         $cl.ToLowerInvariant().Contains($rootLower) -or
         $exe.StartsWith($venvLower) -or
@@ -151,7 +152,10 @@ function Stop-TrafficWatch {
   foreach ($p in $procs) {
     Note ("Stop PID {0} ({1})" -f $p.ProcessId, $p.Name)
     if (-not $DryRun) {
-      try { Stop-Process -Id ([int]$p.ProcessId) -Force -ErrorAction Stop } catch { Note ("  could not stop PID {0}: {1}" -f $p.ProcessId, $_.Exception.Message) }
+      # Child WebView2 processes often exit with their parent; already-gone is fine.
+      if (Get-Process -Id ([int]$p.ProcessId) -ErrorAction SilentlyContinue) {
+        try { Stop-Process -Id ([int]$p.ProcessId) -Force -ErrorAction Stop } catch { Note ("  could not stop PID {0}: {1}" -f $p.ProcessId, $_.Exception.Message) }
+      }
     }
   }
   if (-not $DryRun) { Start-Sleep -Milliseconds 1500 }
@@ -198,7 +202,13 @@ function Restore-SystemSettings {
     if ($fv -match '(?i)^(failure|enable)') { $fl = 'enable' }
     Note ("Restore audit policy 'Filtering Platform Connection' to success:{0} failure:{1}" -f $s, $fl)
     if (-not $DryRun) {
-      $null = & auditpol.exe /set /subcategory:"Filtering Platform Connection" /success:$s /failure:$fl 2>&1
+      # Native stderr becomes a terminating error under -ErrorAction Stop in PS 5.1; judge by exit code.
+      $oldEap = $ErrorActionPreference
+      $ErrorActionPreference = 'Continue'
+      $out = & auditpol.exe /set /subcategory:"Filtering Platform Connection" /success:$s /failure:$fl 2>&1 | Out-String
+      $code = $LASTEXITCODE
+      $ErrorActionPreference = $oldEap
+      if ($code -ne 0) { Note ("  failed (exit {0}): {1}" -f $code, $out.Trim()) }
     }
   }
 }
@@ -277,10 +287,10 @@ try {
   }
 
   Note "TrafficWatch uninstall: $Root"
-  Stop-TrafficWatch
-  Remove-FirewallRules
-  Restore-SystemSettings
-  Remove-Shortcut
+  # Each step is independent: a failure is reported and the rest still run.
+  foreach ($step in @('Stop-TrafficWatch', 'Remove-FirewallRules', 'Restore-SystemSettings', 'Remove-Shortcut')) {
+    try { & $step } catch { Note ("{0} failed: {1}" -f $step, $_.Exception.Message) }
+  }
   Remove-Dir $VenvDir 'Python environment (.venv)'
   if ($opts.DeleteData) { Remove-Dir $DataDir 'user data (data\)' } else { Note 'Kept user data (data\).' }
   if ($opts.OpenApps) {
@@ -290,7 +300,8 @@ try {
   if ($opts.RemoveFolder) {
     Note "Remove program folder $Root (after this window closes)"
     if (-not $DryRun) {
-      $cmd = "/c ping -n 3 127.0.0.1 >nul & rmdir /s /q `"$Root`""
+      # Wait for this script and any child processes to release the folder, then retry once.
+      $cmd = "/c ping -n 4 127.0.0.1 >nul & rmdir /s /q `"$Root`" & ping -n 6 127.0.0.1 >nul & if exist `"$Root`" rmdir /s /q `"$Root`""
       Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\cmd.exe') -ArgumentList $cmd -WindowStyle Hidden -WorkingDirectory $env:TEMP | Out-Null
     }
   }

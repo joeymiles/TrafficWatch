@@ -233,6 +233,11 @@ try {
 
   # Desktop shortcut: offer once. Marker records the answer so we never re-ask.
   $shortcutAsked = Join-Path $dataDir "shortcut.asked"
+  $existingLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "TrafficWatch.lnk"
+  if ((-not (Test-Path $shortcutAsked)) -and (Test-Path $existingLnk)) {
+    # Never overwrite a shortcut the user already has.
+    [System.IO.File]::WriteAllText($shortcutAsked, "exists", [System.Text.Encoding]::ASCII)
+  }
   if (-not (Test-Path $shortcutAsked)) {
     $scMsg = "Add a TrafficWatch shortcut to your desktop? It opens TrafficWatch with its own icon and no console window. You can delete it any time; Uninstall also removes it."
     $answer = "no"
