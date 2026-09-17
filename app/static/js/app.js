@@ -54,6 +54,38 @@
       try { el.remove(); } catch (_) {}
     }, opts.ttl || 8000);
   }
+  // In-app confirm (replaces window.confirm). Resolves true on OK, false on Cancel/Escape/backdrop.
+  function twConfirm(title, text, okLabel) {
+    const modal = document.getElementById("confirm-modal");
+    if (!modal) return Promise.resolve(false);
+    const ok = document.getElementById("confirm-ok");
+    const cancel = document.getElementById("confirm-cancel");
+    document.getElementById("confirm-title").textContent = title || "Confirm";
+    document.getElementById("confirm-text").textContent = text || "";
+    ok.textContent = okLabel || "OK";
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    cancel.focus();
+    return new Promise((resolve) => {
+      function done(result) {
+        modal.classList.add("hidden");
+        modal.setAttribute("aria-hidden", "true");
+        ok.removeEventListener("click", onOk);
+        cancel.removeEventListener("click", onCancel);
+        modal.removeEventListener("click", onBackdrop);
+        document.removeEventListener("keydown", onKey, true);
+        resolve(result);
+      }
+      function onOk() { done(true); }
+      function onCancel() { done(false); }
+      function onBackdrop(e) { if (e.target === modal) done(false); }
+      function onKey(e) { if (e.key === "Escape") { e.stopPropagation(); done(false); } }
+      ok.addEventListener("click", onOk);
+      cancel.addEventListener("click", onCancel);
+      modal.addEventListener("click", onBackdrop);
+      document.addEventListener("keydown", onKey, true);
+    });
+  }
   function fmtDnsTs(ts) {
     if (!ts) return "";
     try {
@@ -2669,8 +2701,13 @@
       })
       .catch(() => {});
   });
-  document.getElementById("btn-clear-history")?.addEventListener("click", () => {
-    if (!window.confirm("Delete persisted history on this PC? This cannot be undone.")) return;
+  document.getElementById("btn-clear-history")?.addEventListener("click", async () => {
+    const yes = await twConfirm(
+      "Clear history",
+      "Delete persisted history on this PC? This cannot be undone.",
+      "Delete history"
+    );
+    if (!yes) return;
     twFetch("/api/history/clear", { method: "POST" })
       .then((r) => r.json())
       .then((j) => {
@@ -3127,7 +3164,7 @@
   function openKillConfirm(force) {
     if (!inspectPid) return;
     if (inspectBody && inspectBody.dataset.critical === "1") {
-      alert("This process is protected and cannot be killed from TrafficWatch.");
+      showToast("Protected process", "This process is protected and cannot be killed from TrafficWatch.", { key: "kill-protected|" + Date.now(), sev: "info", ttl: 5000 });
       return;
     }
     killForce = !!force;
@@ -3539,7 +3576,7 @@
     // Prefer selected connection remote from latest for this inspect pid
     const rows = latest.filter((c) => c.pid === inspectPid && c.remote_ip && !c.private_remote);
     if (!rows.length) {
-      alert("No public remote IP on this process to block.");
+      showToast("Nothing to block", "No public remote IP on this process to block.", { key: "fw-none|" + Date.now(), sev: "info", ttl: 5000 });
       return;
     }
     // If multiple, pick the currently selected row's remote if it matches pid, else first
