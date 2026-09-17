@@ -588,6 +588,13 @@ def main() -> None:
     args = parser.parse_args()
     import applog
     applog.install()
+    if sys.platform.startswith("win"):
+        # Own taskbar identity so the window groups as TrafficWatch, not pythonw.
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("TrafficWatch.Desktop")
+        except Exception as exc:
+            print(f"  AppUserModelID not set: {exc}", flush=True)
 
     # Named mutex first (covers the race where Flask is not up yet).
     if not _acquire_instance_lock():
