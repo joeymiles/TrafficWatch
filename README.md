@@ -57,6 +57,12 @@ Browser fallback: `.\start.ps1 -Browser` | Server only: `.\start.ps1 -NoBrowser`
 
 Quit by closing the window or clicking **Quit** in the top bar (frees port 8767).
 
+On first start TrafficWatch offers a desktop shortcut (own icon, no console window). App log: `data/logs/trafficwatch.log` (capped, tokens and pair codes redacted); launch failures: `data/last-launch-error.txt`.
+
+### Uninstall (Windows)
+
+**Settings > Uninstall...** (or run `app\uninstall.ps1`; add `-DryRun` to preview). After one admin prompt it stops TrafficWatch, removes its firewall block rules, desktop shortcut and `.venv`, turns back off the Windows logging it enabled, and asks before deleting your data in `data/`. Python, Edge and WebView2 are never removed.
+
 ### Linux
 
 ```bash
