@@ -256,10 +256,30 @@ function Flush-TcpBytes {
   foreach ($row in $snap) { Enqueue-Tcp $row }
 }
 
+function Save-SystemBaseline {
+  # Record the pre-TrafficWatch value of a system setting the first time we change it,
+  # so Uninstall can restore it even after a crash. Existing keys are never overwritten.
+  param([string]$Key, [string]$Value)
+  try {
+    $dir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'data'
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    $path = Join-Path $dir 'system_baseline.json'
+    $map = @{}
+    if (Test-Path $path) {
+      $obj = (Get-Content -Raw -Path $path) | ConvertFrom-Json
+      foreach ($p in $obj.PSObject.Properties) { $map[$p.Name] = [string]$p.Value }
+    }
+    if ($map.ContainsKey($Key)) { return }
+    $map[$Key] = $Value
+    [System.IO.File]::WriteAllText($path, ($map | ConvertTo-Json -Compress), (New-Object System.Text.UTF8Encoding $false))
+  } catch {}
+}
+
 function Enable-DnsLog {
   try {
     $cfg = New-Object System.Diagnostics.Eventing.Reader.EventLogConfiguration 'Microsoft-Windows-DNS-Client/Operational'
     if (-not $cfg.IsEnabled) {
+      Save-SystemBaseline -Key 'dns_client_operational' -Value 'disabled'
       $cfg.IsEnabled = $true
       $cfg.SaveChanges()
     }
@@ -398,6 +418,7 @@ function Enable-KernelNetworkLog {
     $cfg = New-Object System.Diagnostics.Eventing.Reader.EventLogConfiguration 'Microsoft-Windows-Kernel-Network/Analytic'
     $script:KnLogWasEnabled = [bool]$cfg.IsEnabled
     if (-not $cfg.IsEnabled) {
+      Save-SystemBaseline -Key 'kernel_network_analytic' -Value 'disabled'
       $cfg.IsEnabled = $true
       $cfg.SaveChanges()
     }
@@ -667,6 +688,7 @@ function Enable-WfpAudit {
     return $true
   }
   try {
+    Save-SystemBaseline -Key 'auditpol_wfp_connection' -Value ('success=' + $prev.success + ';failure=' + $prev.failure)
     $null = & auditpol.exe /set /subcategory:"Filtering Platform Connection" /success:enable /failure:disable 2>&1
     $script:AuditPolChanged = $true
     return $true
