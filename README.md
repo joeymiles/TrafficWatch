@@ -7,9 +7,9 @@ No telemetry. No accounts. No packet capture / payload decode / port scanning.
 
 ## Demo
 
-![TrafficWatch demo — local 3D globe of your local PC/Laptop's connections](docs/readme/demo.png)
+![TrafficWatch demo — local 3D globe of your local PC/Laptop's connections](docs/readme/demo.gif)
 
-Optional motion capture (may not autoplay on GitHub): [demo.webm](docs/readme/demo.webm) · [demo.gif](docs/readme/demo.gif)
+Still frame: [demo.png](docs/readme/demo.png) · Video: [demo.webm](docs/readme/demo.webm)
 
 ## Why I built this
 
