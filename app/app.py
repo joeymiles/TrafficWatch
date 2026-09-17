@@ -9,6 +9,8 @@ import os
 import functools
 import hmac
 import secrets
+import subprocess
+import sys
 import webbrowser
 import csv
 import io
@@ -1604,6 +1606,20 @@ def _security_headers(resp: Response):
     return resp
 
 
+def _open_app_window(url: str) -> None:
+    """Browser-mode fallback: prefer an Edge app window (no tabs/address bar), else default browser."""
+    if sys.platform.startswith("win"):
+        for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles")):
+            edge = os.path.join(base or "", "Microsoft", "Edge", "Application", "msedge.exe")
+            if base and os.path.isfile(edge):
+                try:
+                    subprocess.Popen([edge, f"--app={url}"], close_fds=True)
+                    return
+                except OSError:
+                    break
+    webbrowser.open(url)
+
+
 def main() -> None:
 
     parser = argparse.ArgumentParser(description="TrafficWatch local traffic map")
@@ -1612,6 +1628,8 @@ def main() -> None:
     parser.add_argument("--browser", action="store_true", help="Open browser to UI")
     parser.add_argument("--no-geo-download", action="store_true", help="Skip MMDB download attempt")
     args = parser.parse_args()
+    import applog
+    applog.install()
     # Authenticode stays off until after first (lite) snapshot — same as desktop.
 
     if not is_loopback_bind(args.host):
@@ -1711,7 +1729,7 @@ def main() -> None:
     print("  Phase 2: socketio starting immediately (lite snapshot in background)", flush=True)
 
     if args.browser:
-        threading.Timer(1.2, lambda: webbrowser.open(pair_url)).start()
+        threading.Timer(1.2, lambda: _open_app_window(pair_url)).start()
 
     try:
         socketio.run(

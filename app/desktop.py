@@ -586,6 +586,8 @@ def main() -> None:
         help="Disable system-tray minimize (pystray)",
     )
     args = parser.parse_args()
+    import applog
+    applog.install()
 
     # Named mutex first (covers the race where Flask is not up yet).
     if not _acquire_instance_lock():

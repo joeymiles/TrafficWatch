@@ -41,10 +41,28 @@ function Ask-YesNo {
     )
     return ($r -eq [System.Windows.Forms.DialogResult]::Yes)
   } catch {
-    Write-Host $Text
-    $a = Read-Host "Type YES to continue"
-    return ($a -eq "YES")
+    # Launcher console is hidden; a Read-Host here would be an invisible hang. Treat as No.
+    Write-Host "Could not show dialog; treating as No: $Text"
+    return $false
   }
+}
+
+function New-TwDesktopShortcut {
+  # Desktop .lnk that runs start.ps1 with a hidden console and the real TrafficWatch icon.
+  $desk = [Environment]::GetFolderPath("Desktop")
+  $lnk = Join-Path $desk "TrafficWatch.lnk"
+  $ico = Join-Path $PSScriptRoot "app\static\trafficwatch.ico"
+  $ps = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+  $sh = New-Object -ComObject WScript.Shell
+  $s = $sh.CreateShortcut($lnk)
+  $s.TargetPath = $ps
+  $s.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $PSScriptRoot 'start.ps1')`""
+  $s.WorkingDirectory = $PSScriptRoot
+  $s.WindowStyle = 7
+  if (Test-Path $ico) { $s.IconLocation = "$ico,0" }
+  $s.Description = "TrafficWatch - local network traffic map"
+  $s.Save()
+  return $lnk
 }
 
 function Test-WebView2 {
@@ -180,8 +198,9 @@ try {
         Add-Type -AssemblyName Microsoft.VisualBasic
         $tok = [Microsoft.VisualBasic.Interaction]::InputBox("Paste your IPinfo Lite token. It is stored only in data\ipinfo.token. Leave blank to skip.", "TrafficWatch IPinfo", "")
       } catch {
-        Write-Host "Paste IPinfo token (input hidden from logs). Blank = skip."
-        $tok = Read-Host
+        # No input dialog available and the console is hidden: skip rather than hang.
+        Write-Host "Could not show token dialog; IPinfo skipped for this launch."
+        $tok = ""
       }
       $tok = (($tok + "").Trim())
       if ($tok.Length -gt 0) {
@@ -210,6 +229,24 @@ try {
       [System.IO.File]::WriteAllText($geoSkip, "skipped", [System.Text.Encoding]::ASCII)
       $noGeo = $true
     }
+  }
+
+  # Desktop shortcut: offer once. Marker records the answer so we never re-ask.
+  $shortcutAsked = Join-Path $dataDir "shortcut.asked"
+  if (-not (Test-Path $shortcutAsked)) {
+    $scMsg = "Add a TrafficWatch shortcut to your desktop? It opens TrafficWatch with its own icon and no console window. You can delete it any time; Uninstall also removes it."
+    $answer = "no"
+    if (Ask-YesNo -Text $scMsg -Title "TrafficWatch - desktop shortcut?") {
+      try {
+        $made = New-TwDesktopShortcut
+        $answer = "yes"
+        Write-Host "Desktop shortcut created: $made"
+      } catch {
+        $answer = "failed"
+        Write-Host "Could not create desktop shortcut: $($_.Exception.Message)" -ForegroundColor Yellow
+      }
+    }
+    [System.IO.File]::WriteAllText($shortcutAsked, $answer, [System.Text.Encoding]::ASCII)
   }
 
   $listening = $false
