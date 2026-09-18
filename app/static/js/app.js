@@ -3324,7 +3324,14 @@
   document.getElementById("alert-act-inspect")?.addEventListener("click", () => {
     if (!currentAlert) return;
     const pid = currentAlert.payload && currentAlert.payload.pid;
-    if (pid != null) openInspect(pid);
+    if (pid == null) {
+      showToast("Nothing to inspect", "This alert is not tied to a running process.", { key: "alert-inspect-nopid|" + Date.now(), sev: "info", ttl: 5000 });
+      return;
+    }
+    // #78: the alert modal and Inspect share a z-index and the alert modal comes later
+    // in the DOM, so Inspect opened hidden underneath it. Close the alert first.
+    closeAlertDetail();
+    openInspect(pid);
   });
   document.getElementById("alert-act-globe")?.addEventListener("click", () => {
     if (!currentAlert) return;
