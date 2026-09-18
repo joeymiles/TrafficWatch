@@ -355,19 +355,19 @@ function Start-DnsWatch {
         if ($stNum -eq 9003 -or $stNum -eq 0x232B) { $nx = $true }
         if ($status -and ($status -match 'NXDOMAIN')) { $nx = $true }
         if ($resultsRaw -and ($resultsRaw -match 'NXDOMAIN')) { $nx = $true }
-        $pid = 0
-        try { $pid = [int]$rec.ProcessId } catch { $pid = 0 }
+        $procId = 0
+        try { $procId = [int]$rec.ProcessId } catch { $procId = 0 }
         $proc = $null
-        if ($pid -gt 0) {
-          try { $proc = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch {
-            try { $proc = [System.Diagnostics.Process]::GetProcessById($pid).ProcessName } catch { $proc = $null }
+        if ($procId -gt 0) {
+          try { $proc = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch {
+            try { $proc = [System.Diagnostics.Process]::GetProcessById($procId).ProcessName } catch { $proc = $null }
           }
         }
         $ts = [datetime]::UtcNow.ToString('o')
         try { $ts = $rec.TimeCreated.ToUniversalTime().ToString('o') } catch {}
         $row = @{
           t = 'dns'
-          pid = $(if ($pid -gt 0) { $pid } else { $null })
+          pid = $(if ($procId -gt 0) { $procId } else { $null })
           proc = $proc
           name = $(if ($name) { $name } else { $null })
           status = $(if ($status) { $status } else { $null })
@@ -475,7 +475,7 @@ function Parse-KnEvent {
     31 { $action = 'accept' }
     default { return $null }
   }
-  $pid = 0
+  $procId = 0
   $size = [long]0
   $saddr = $null
   $daddr = $null
@@ -487,8 +487,8 @@ function Parse-KnEvent {
       if (-not $d.Name) { continue }
       $val = [string]$d.'#text'
       switch ($d.Name) {
-        'PID' { [void][int]::TryParse($val, [ref]$pid) }
-        'ProcessId' { if ($pid -le 0) { [void][int]::TryParse($val, [ref]$pid) } }
+        'PID' { [void][int]::TryParse($val, [ref]$procId) }
+        'ProcessId' { if ($procId -le 0) { [void][int]::TryParse($val, [ref]$procId) } }
         'size' { [void][long]::TryParse($val, [ref]$size) }
         'Size' { if ($size -le 0) { [void][long]::TryParse($val, [ref]$size) } }
         'saddr' { $saddr = Convert-UIntToIPv4 $val; if (-not $saddr) { $saddr = $val } }
@@ -502,8 +502,8 @@ function Parse-KnEvent {
       }
     }
   } catch { return $null }
-  if ($pid -le 0) {
-    try { $pid = [int]$rec.ProcessId } catch { $pid = 0 }
+  if ($procId -le 0) {
+    try { $procId = [int]$rec.ProcessId } catch { $procId = 0 }
   }
   # Local/remote by action: connect/send use saddr=local; accept uses daddr as local peer view
   $lip = $saddr; $lport = $sport; $rip = $daddr; $rport = $dport
@@ -519,7 +519,7 @@ function Parse-KnEvent {
   return @{
     action = $action
     dir = $dir
-    pid = $(if ($pid -gt 0) { $pid } else { $null })
+    pid = $(if ($procId -gt 0) { $procId } else { $null })
     size = $size
     local_ip = $lip
     local_port = $lport
@@ -563,7 +563,7 @@ function Start-KernelNetworkWatch {
           31 { $action = 'accept' }
           default { return }
         }
-        $pid = 0
+        $procId = 0
         $size = [long]0
         $saddrRaw = $null
         $daddrRaw = $null
@@ -575,7 +575,7 @@ function Start-KernelNetworkWatch {
             if (-not $d.Name) { continue }
             $val = [string]$d.'#text'
             switch ($d.Name) {
-              'PID' { [void][int]::TryParse($val, [ref]$pid) }
+              'PID' { [void][int]::TryParse($val, [ref]$procId) }
               'size' { [void][long]::TryParse($val, [ref]$size) }
               'saddr' { $saddrRaw = $val }
               'daddr' { $daddrRaw = $val }
@@ -594,17 +594,17 @@ function Start-KernelNetworkWatch {
         }
         $saddr = _u2ip $saddrRaw
         $daddr = _u2ip $daddrRaw
-        if ($pid -le 0) { try { $pid = [int]$rec.ProcessId } catch { $pid = 0 } }
+        if ($procId -le 0) { try { $procId = [int]$rec.ProcessId } catch { $procId = 0 } }
         $proc = $null
-        if ($pid -gt 0) {
+        if ($procId -gt 0) {
           # Per-packet Get-Process was a large share of the per-event cost; cache names.
           if (-not $global:TwProcNames) { $global:TwProcNames = @{} }
-          if ($global:TwProcNames.ContainsKey($pid)) {
-            $proc = $global:TwProcNames[$pid]
+          if ($global:TwProcNames.ContainsKey($procId)) {
+            $proc = $global:TwProcNames[$procId]
           } else {
-            try { $proc = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch { $proc = $null }
+            try { $proc = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch { $proc = $null }
             if ($global:TwProcNames.Count -gt 2000) { $global:TwProcNames.Clear() }
-            $global:TwProcNames[$pid] = $proc
+            $global:TwProcNames[$procId] = $proc
           }
         }
         $lip = $saddr; $lport = $sport; $rip = $daddr; $rport = $dport
@@ -618,7 +618,7 @@ function Start-KernelNetworkWatch {
         $payload = @{
           action = $action
           dir = $dir
-          pid = $(if ($pid -gt 0) { $pid } else { $null })
+          pid = $(if ($procId -gt 0) { $procId } else { $null })
           proc = $proc
           local_ip = $lip
           local_port = $lport
@@ -662,24 +662,24 @@ function Consume-KnInbox {
       break
     }
     $a = [string]$item.action
-    $pid = $item.pid
+    $procId = $item.pid
     $proc = $item.proc
     if ($a -eq 'connect' -or $a -eq 'accept') {
-      Upsert-TcpFlow -Kind 'open' -Dir $item.dir -PidVal $pid -Proc $proc `
+      Upsert-TcpFlow -Kind 'open' -Dir $item.dir -PidVal $procId -Proc $proc `
         -LocalIp $item.local_ip -LocalPort $item.local_port `
         -RemoteIp $item.remote_ip -RemotePort $item.remote_port -Ts $item.ts
     } elseif ($a -eq 'send') {
-      Upsert-TcpFlow -Kind 'bytes' -Dir $item.dir -PidVal $pid -Proc $proc `
+      Upsert-TcpFlow -Kind 'bytes' -Dir $item.dir -PidVal $procId -Proc $proc `
         -LocalIp $item.local_ip -LocalPort $item.local_port `
         -RemoteIp $item.remote_ip -RemotePort $item.remote_port `
         -AddOut ([long]$item.size) -Ts $item.ts
     } elseif ($a -eq 'recv') {
-      Upsert-TcpFlow -Kind 'bytes' -Dir $item.dir -PidVal $pid -Proc $proc `
+      Upsert-TcpFlow -Kind 'bytes' -Dir $item.dir -PidVal $procId -Proc $proc `
         -LocalIp $item.local_ip -LocalPort $item.local_port `
         -RemoteIp $item.remote_ip -RemotePort $item.remote_port `
         -AddIn ([long]$item.size) -Ts $item.ts
     } elseif ($a -eq 'close') {
-      Upsert-TcpFlow -Kind 'close' -Dir $item.dir -PidVal $pid -Proc $proc `
+      Upsert-TcpFlow -Kind 'close' -Dir $item.dir -PidVal $procId -Proc $proc `
         -LocalIp $item.local_ip -LocalPort $item.local_port `
         -RemoteIp $item.remote_ip -RemotePort $item.remote_port -Ts $item.ts
     }
@@ -753,7 +753,7 @@ function Start-WfpWatch {
         $id = 0
         try { $id = [int]$rec.Id } catch { return }
         if ($id -ne 5156 -and $id -ne 5158) { return }
-        $pid = 0
+        $procId = 0
         $app = $null
         $dirRaw = ''
         $src = $null
@@ -767,7 +767,7 @@ function Start-WfpWatch {
             if (-not $d.Name) { continue }
             $val = [string]$d.'#text'
             switch ($d.Name) {
-              'ProcessID' { [void][int]::TryParse($val, [ref]$pid) }
+              'ProcessID' { [void][int]::TryParse($val, [ref]$procId) }
               'Application' { $app = $val }
               'Direction' { $dirRaw = $val }
               'SourceAddress' { $src = $val }
@@ -787,8 +787,8 @@ function Start-WfpWatch {
         if ($app) {
           try { $proc = [System.IO.Path]::GetFileNameWithoutExtension($app) } catch { $proc = $app }
         }
-        if (-not $proc -and $pid -gt 0) {
-          try { $proc = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch {}
+        if (-not $proc -and $procId -gt 0) {
+          try { $proc = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch {}
         }
         # Direction: outbound connect -> local=src remote=dst; inbound accept -> local=dst remote=src
         if ($dir -eq 'accept') {
@@ -804,7 +804,7 @@ function Start-WfpWatch {
         [void]$global:TwTcpWfpInbox.Enqueue(@{
           action = $(if ($id -eq 5158) { 'bind' } else { 'open' })
           dir = $dir
-          pid = $(if ($pid -gt 0) { $pid } else { $null })
+          pid = $(if ($procId -gt 0) { $procId } else { $null })
           proc = $proc
           local_ip = $lip
           local_port = $lport
@@ -871,7 +871,7 @@ function Invoke-StormGuard {
   if ($rate -gt $StormEventsPerSec) { $script:StormHotRate++ } else { $script:StormHotRate = 0 }
 
   $intr = -1
-  try {
+  if (-not $script:IntrCounterFailed) { try {
     if (-not $script:IntrCounter) {
       $script:IntrCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Interrupt Time', '_Total')
       $script:DpcCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% DPC Time', '_Total')
@@ -879,7 +879,12 @@ function Invoke-StormGuard {
     } else {
       $intr = [double]$script:IntrCounter.NextValue() + [double]$script:DpcCounter.NextValue()
     }
-  } catch { $intr = -1 }
+  } catch {
+    $intr = -1
+    $script:IntrCounterFailed = $true
+    $script:IntrCounter = $null
+    $script:DpcCounter = $null
+  } }
   $script:StormIntrPct = [int][Math]::Max(0, $intr)
   if ($intr -gt $StormIntrDpcPct) { $script:StormHotIntr++ } else { $script:StormHotIntr = 0 }
 
@@ -893,11 +898,22 @@ function Invoke-StormFailSoft([string]$Why) {
   $global:TwStormTripped = $true
   $src = $script:TcpSource
   Stop-TcpWatch
+  # Restore only returns the log to its pre-helper state; if it was already on,
+  # the kernel keeps paying per-packet cost. Force it off on a storm.
+  try {
+    $cfg = New-Object System.Diagnostics.Eventing.Reader.EventLogConfiguration 'Microsoft-Windows-Kernel-Network/Analytic'
+    if ($cfg.IsEnabled) { $cfg.IsEnabled = $false; $cfg.SaveChanges() }
+  } catch {}
   $script:TcpSource = 'none'
   $script:TcpLimited = $true
-  $script:TcpError = ('Paused ' + $src + ' capture to protect the PC (' + $Why + '). Connections still update from the normal poll. Retry allowed after ' + [int]($StormCooldownSec / 60) + ' min.')
   $script:StormTrippedUtc = [datetime]::UtcNow
   $script:StormTrips++
+  if ($script:StormTrips -ge 3) {
+    $next = 'Live capture stays off until you restart it (Settings: Enable live DNS).'
+  } else {
+    $next = 'Retry allowed after ' + [int](($StormCooldownSec * [Math]::Pow(2, $script:StormTrips - 1)) / 60) + ' min.'
+  }
+  $script:TcpError = ('Paused ' + $src + ' capture to protect the PC (' + $Why + '). Connections still update from the normal poll. ' + $next)
   $script:StormHotRate = 0
   $script:StormHotIntr = 0
   try { if ($script:Writer) { Send-Obj (Get-StatusObj) } } catch {}
@@ -905,7 +921,13 @@ function Invoke-StormFailSoft([string]$Why) {
 
 function Start-TcpWatch {
   if ($script:TcpEnabled) { return $true }
-  if ($script:StormTrippedUtc -and (([datetime]::UtcNow - $script:StormTrippedUtc).TotalSeconds -lt $StormCooldownSec)) {
+  if ($script:StormTrips -ge 3) {
+    # Tripped three times this helper session: stay poll-only until the helper restarts.
+    $script:TcpLimited = $true
+    return $false
+  }
+  $cool = $StormCooldownSec * [Math]::Pow(2, [Math]::Max(0, $script:StormTrips - 1))
+  if ($script:StormTrippedUtc -and (([datetime]::UtcNow - $script:StormTrippedUtc).TotalSeconds -lt $cool)) {
     # Still cooling down after a storm trip: stay in poll-only mode.
     $script:TcpLimited = $true
     return $false
