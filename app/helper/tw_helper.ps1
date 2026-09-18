@@ -8,7 +8,11 @@ param(
   [int]$ParentPid = 0,
   [string]$ClientSid = '',
   [string]$PipeName = 'TrafficWatch-helper',
-  [int]$IdleExitSec = 90
+  [int]$IdleExitSec = 90,
+  # Storm guard (#69): fail soft instead of pegging CPU / interrupts.
+  [int]$StormEventsPerSec = 1500,
+  [int]$StormIntrDpcPct = 25,
+  [int]$StormCooldownSec = 600
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,6 +44,14 @@ $script:TcpFlows = @{}
 $script:TcpFlowLock = New-Object object
 $script:TcpQueueCap = 400
 $script:TcpStormDrops = 0
+$script:StormTrips = 0
+$script:StormRate = 0
+$script:StormIntrPct = 0
+$script:StormTrippedUtc = $null
+$script:StormLastUtc = $null
+$global:TwKnSeen = [long]0
+$global:TwWfpSeen = [long]0
+$global:TwStormTripped = $false
 $script:TcpLastFlushUtc = [datetime]::UtcNow
 $script:KnLogWasEnabled = $null
 $script:AuditPolChanged = $false
@@ -528,6 +540,9 @@ function Start-KernelNetworkWatch {
     )
     $w = New-Object System.Diagnostics.Eventing.Reader.EventLogWatcher($q)
     $null = Register-ObjectEvent -InputObject $w -EventName EventRecordWritten -SourceIdentifier 'TW-TcpKnWritten' -Action {
+      # Count before any work; once the storm guard trips, do nothing per event.
+      $global:TwKnSeen++
+      if ($global:TwStormTripped) { return }
       try {
         $e = $EventArgs
         if (-not $e -or -not $e.EventRecord) { return }
@@ -582,7 +597,15 @@ function Start-KernelNetworkWatch {
         if ($pid -le 0) { try { $pid = [int]$rec.ProcessId } catch { $pid = 0 } }
         $proc = $null
         if ($pid -gt 0) {
-          try { $proc = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch { $proc = $null }
+          # Per-packet Get-Process was a large share of the per-event cost; cache names.
+          if (-not $global:TwProcNames) { $global:TwProcNames = @{} }
+          if ($global:TwProcNames.ContainsKey($pid)) {
+            $proc = $global:TwProcNames[$pid]
+          } else {
+            try { $proc = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch { $proc = $null }
+            if ($global:TwProcNames.Count -gt 2000) { $global:TwProcNames.Clear() }
+            $global:TwProcNames[$pid] = $proc
+          }
         }
         $lip = $saddr; $lport = $sport; $rip = $daddr; $rport = $dport
         $dir = 'connect'
@@ -721,6 +744,8 @@ function Start-WfpWatch {
     )
     $w = New-Object System.Diagnostics.Eventing.Reader.EventLogWatcher($q)
     $null = Register-ObjectEvent -InputObject $w -EventName EventRecordWritten -SourceIdentifier 'TW-TcpWfpWritten' -Action {
+      $global:TwWfpSeen++
+      if ($global:TwStormTripped) { return }
       try {
         $e = $EventArgs
         if (-not $e -or -not $e.EventRecord) { return }
@@ -824,8 +849,68 @@ function Consume-WfpInbox {
   }
 }
 
+function Invoke-StormGuard {
+  # Called from the main loops (every ~200 ms - 1 s); evaluates once per second.
+  $now = [datetime]::UtcNow
+  if ($null -eq $script:StormLastUtc) {
+    $script:StormLastUtc = $now
+    $script:StormLastSeen = [long]($global:TwKnSeen + $global:TwWfpSeen)
+    $script:StormHotRate = 0
+    $script:StormHotIntr = 0
+    return
+  }
+  $dt = ($now - $script:StormLastUtc).TotalSeconds
+  if ($dt -lt 1.0) { return }
+  $seen = [long]($global:TwKnSeen + $global:TwWfpSeen)
+  $rate = ($seen - $script:StormLastSeen) / $dt
+  $script:StormLastUtc = $now
+  $script:StormLastSeen = $seen
+  $script:StormRate = [int]$rate
+  if (-not $script:TcpEnabled) { $script:StormHotRate = 0; $script:StormHotIntr = 0; return }
+
+  if ($rate -gt $StormEventsPerSec) { $script:StormHotRate++ } else { $script:StormHotRate = 0 }
+
+  $intr = -1
+  try {
+    if (-not $script:IntrCounter) {
+      $script:IntrCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Interrupt Time', '_Total')
+      $script:DpcCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% DPC Time', '_Total')
+      [void]$script:IntrCounter.NextValue(); [void]$script:DpcCounter.NextValue()
+    } else {
+      $intr = [double]$script:IntrCounter.NextValue() + [double]$script:DpcCounter.NextValue()
+    }
+  } catch { $intr = -1 }
+  $script:StormIntrPct = [int][Math]::Max(0, $intr)
+  if ($intr -gt $StormIntrDpcPct) { $script:StormHotIntr++ } else { $script:StormHotIntr = 0 }
+
+  $why = $null
+  if ($script:StormHotRate -ge 3) { $why = ('event storm: {0}/s for 3s (limit {1}/s)' -f [int]$rate, $StormEventsPerSec) }
+  elseif ($script:StormHotIntr -ge 3) { $why = ('interrupt+DPC CPU {0}% for 3s (limit {1}%)' -f [int]$intr, $StormIntrDpcPct) }
+  if ($why) { Invoke-StormFailSoft $why }
+}
+
+function Invoke-StormFailSoft([string]$Why) {
+  $global:TwStormTripped = $true
+  $src = $script:TcpSource
+  Stop-TcpWatch
+  $script:TcpSource = 'none'
+  $script:TcpLimited = $true
+  $script:TcpError = ('Paused ' + $src + ' capture to protect the PC (' + $Why + '). Connections still update from the normal poll. Retry allowed after ' + [int]($StormCooldownSec / 60) + ' min.')
+  $script:StormTrippedUtc = [datetime]::UtcNow
+  $script:StormTrips++
+  $script:StormHotRate = 0
+  $script:StormHotIntr = 0
+  try { if ($script:Writer) { Send-Obj (Get-StatusObj) } } catch {}
+}
+
 function Start-TcpWatch {
   if ($script:TcpEnabled) { return $true }
+  if ($script:StormTrippedUtc -and (([datetime]::UtcNow - $script:StormTrippedUtc).TotalSeconds -lt $StormCooldownSec)) {
+    # Still cooling down after a storm trip: stay in poll-only mode.
+    $script:TcpLimited = $true
+    return $false
+  }
+  $global:TwStormTripped = $false
   # Prefer Kernel-Network Analytic (bytes + connect/accept). Fallback WFP 5156.
   if (Start-KernelNetworkWatch) { return $true }
   $knErr = $script:TcpError
@@ -880,6 +965,9 @@ function Get-StatusObj {
     tcp_limited = [bool]$script:TcpLimited
     tcp_error = $script:TcpError
     tcp_storm_drops = [int]$script:TcpStormDrops
+    storm_trips = [int]$script:StormTrips
+    storm_event_rate = [int]$script:StormRate
+    storm_intr_dpc_pct = [int]$script:StormIntrPct
     ts = [datetime]::UtcNow.ToString('o')
   }
 }
@@ -1007,6 +1095,7 @@ try {
         Consume-KnInbox
         Consume-WfpInbox
         Drain-AllQueues
+        Invoke-StormGuard
         if ($iar.AsyncWaitHandle.WaitOne(1000)) {
           $pipe.EndWaitForConnection($iar)
           $connected = $true
@@ -1038,6 +1127,7 @@ try {
             Consume-KnInbox
             Consume-WfpInbox
             Drain-AllQueues
+            Invoke-StormGuard
             Start-Sleep -Milliseconds 200
           }
           if ($script:Shutdown) { break }

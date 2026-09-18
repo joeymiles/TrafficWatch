@@ -183,7 +183,14 @@
         { key: "dns-limited-session", sev: "info", ttl: 9000 }
       );
     }
-    if (h.connected && h.tcp_limited) {
+    if (h.storm_trips > 0) {
+      // Helper paused packet-level capture because it was loading the CPU (#69).
+      showToast(
+        "Capture paused to protect this PC",
+        h.tcp_error || "Live packet capture was using too much CPU and was paused. Connections still update from the normal poll.",
+        { key: "storm|" + h.storm_trips, sev: "info", ttl: 15000 }
+      );
+    } else if (h.connected && h.tcp_limited) {
       showToast(
         "TCP limited",
         "Helper TCP bytes limited (" + (h.tcp_source || "none") + "). Direction may stay guess for some rows; Enable live DNS restarts helper.",

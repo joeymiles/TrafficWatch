@@ -490,6 +490,24 @@ window.TWMap = (() => {
 
     defaultMaterial = globe.globeMaterial && globe.globeMaterial();
 
+    // GPU budget (#69): cap render resolution on high-DPI screens and stop rendering
+    // entirely while the window is hidden/minimized, so the globe never loads the
+    // GPU driver (seen as "System interrupts") when nobody is looking at it.
+    try {
+      const r = globe.renderer && globe.renderer();
+      if (r && r.setPixelRatio) r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    } catch (_) {}
+    document.addEventListener("visibilitychange", () => {
+      if (!globe) return;
+      try {
+        if (document.hidden) {
+          if (globe.pauseAnimation) globe.pauseAnimation();
+        } else if (globe.resumeAnimation) {
+          globe.resumeAnimation();
+        }
+      } catch (_) {}
+    });
+
     resizeFn = () => {
       if (!globe || !el) return;
       const w = el.clientWidth || 600;

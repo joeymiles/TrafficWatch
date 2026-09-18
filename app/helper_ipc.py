@@ -71,6 +71,7 @@ _state: dict[str, Any] = {
     "tcp_events_count": 0,
     "tcp_error": None,
     "tcp_source": "none",
+    "storm_trips": 0,
 }
 _stop = threading.Event()
 _reader_started = False
@@ -99,6 +100,7 @@ def status() -> dict[str, Any]:
             "tcp_events_count": int(_state["tcp_events_count"] or 0),
             "tcp_error": _state["tcp_error"],
             "tcp_source": _state.get("tcp_source") or "none",
+            "storm_trips": int(_state.get("storm_trips") or 0),
         }
 
 
@@ -350,7 +352,12 @@ def _ingest_line(raw: str) -> None:
             if obj.get("tcp_source"):
                 _state["tcp_source"] = str(obj.get("tcp_source"))
             if obj.get("tcp_error"):
-                _state["tcp_error"] = str(obj.get("tcp_error"))[:160]
+                _state["tcp_error"] = str(obj.get("tcp_error"))[:300]
+            if obj.get("storm_trips") is not None:
+                try:
+                    _state["storm_trips"] = int(obj.get("storm_trips") or 0)
+                except (TypeError, ValueError):
+                    pass
             if obj.get("last_error"):
                 _state["last_error"] = str(obj.get("last_error"))[:160]
             if obj.get("events") is not None:
