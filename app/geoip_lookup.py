@@ -506,9 +506,83 @@ def lookup(ip: str | None) -> dict[str, Any]:
     return result
 
 
+# Offline approximate home (#68): a well-known city for the PC's Windows time zone.
+# No network call and nothing personal: the time zone id is read locally and only a
+# public city center is used. Unknown zones keep the US-center fallback.
+_TZ_CITY = {
+    "US Eastern Standard Time": ("Indianapolis area", 39.7684, -86.1581),
+    "Eastern Standard Time": ("US Eastern", 40.7128, -74.0060),
+    "Central Standard Time": ("US Central", 41.8781, -87.6298),
+    "Mountain Standard Time": ("US Mountain", 39.7392, -104.9903),
+    "US Mountain Standard Time": ("Arizona", 33.4484, -112.0740),
+    "Pacific Standard Time": ("US Pacific", 34.0522, -118.2437),
+    "Alaskan Standard Time": ("Alaska", 61.2181, -149.9003),
+    "Hawaiian Standard Time": ("Hawaii", 21.3069, -157.8583),
+    "Atlantic Standard Time": ("Atlantic Canada", 44.6488, -63.5752),
+    "GMT Standard Time": ("UK / Ireland", 51.5074, -0.1278),
+    "W. Europe Standard Time": ("Western Europe", 52.5200, 13.4050),
+    "Romance Standard Time": ("France / Benelux", 48.8566, 2.3522),
+    "Central European Standard Time": ("Central Europe", 52.2297, 21.0122),
+    "India Standard Time": ("India", 28.6139, 77.2090),
+    "China Standard Time": ("China", 39.9042, 116.4074),
+    "Tokyo Standard Time": ("Japan", 35.6762, 139.6503),
+    "AUS Eastern Standard Time": ("Australia East", -33.8688, 151.2093),
+}
+
+
+def _windows_tz_id() -> str | None:
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _DTZI(ctypes.Structure):
+            _fields_ = [
+                ("Bias", wintypes.LONG),
+                ("StandardName", wintypes.WCHAR * 32),
+                ("StandardDate", wintypes.WORD * 8),
+                ("StandardBias", wintypes.LONG),
+                ("DaylightName", wintypes.WCHAR * 32),
+                ("DaylightDate", wintypes.WORD * 8),
+                ("DaylightBias", wintypes.LONG),
+                ("TimeZoneKeyName", wintypes.WCHAR * 128),
+                ("DynamicDaylightTimeDisabled", wintypes.BOOLEAN),
+            ]
+
+        info = _DTZI()
+        if ctypes.windll.kernel32.GetDynamicTimeZoneInformation(ctypes.byref(info)) == 0xFFFFFFFF:
+            return None
+        return info.TimeZoneKeyName or None
+    except Exception:
+        return None
+
+
+def approximate_home() -> dict[str, Any]:
+    """Home without any network lookup: time-zone city if known, else ASSUMED_HOME."""
+    tz = _windows_tz_id()
+    hit = _TZ_CITY.get(tz or "")
+    if not hit:
+        return dict(ASSUMED_HOME)
+    name, lat, lon = hit
+    return {
+        "ip": None,
+        "lat": lat,
+        "lon": lon,
+        "city": None,
+        "region": None,
+        "country": None,
+        "country_code": None,
+        "org": None,
+        "asn": None,
+        "source": "timezone",
+        "label": f"Approx. home ({name}, from time zone)",
+    }
+
+
 def detect_public_home() -> dict[str, Any]:
-    """Optional one-shot public IP geo (no key). Falls back to ASSUMED_HOME."""
-    home = dict(ASSUMED_HOME)
+    """Optional one-shot public IP geo (no key). Falls back to approximate_home()."""
+    home = approximate_home()
     try:
         req = urllib.request.Request(
             "https://ipapi.co/json/",
@@ -548,7 +622,7 @@ def init_geo(detect_home: bool = False, allow_download: bool = True) -> dict[str
     load_disk_cache()
     ok, msg = open_reader()
     ip_ok, ip_msg = open_ipinfo_reader()
-    home = detect_public_home() if detect_home else dict(ASSUMED_HOME)
+    home = detect_public_home() if detect_home else approximate_home()
     return {
         "mmdb_ok": ok,
         "mmdb_msg": msg,
