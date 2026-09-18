@@ -880,7 +880,15 @@
     try {
       const raw = localStorage.getItem(LS_HOME);
       if (!raw) return null;
-      return JSON.parse(raw);
+      const h = JSON.parse(raw);
+      // #68: a "saved" home that is exactly the US-center fallback was never a real
+      // choice (the Home panel pre-filled it and Save wrote it back). Drop it so the
+      // time-zone / detected home is used instead.
+      if (h && Math.abs(h.lat - 39.8283) < 0.001 && Math.abs(h.lon + 98.5795) < 0.001) {
+        localStorage.removeItem(LS_HOME);
+        return null;
+      }
+      return h;
     } catch (_) {
       return null;
     }
@@ -2702,8 +2710,12 @@
       .then((r) => r.json())
       .then((j) => {
         if (j && j.ok && j.home) {
-          // #68: persist like a manual Save, so the globe re-centers here after restart.
+          // #68: persist like a manual Save, so the globe re-centers here after restart,
+          // and fill the panel so a following Save keeps the detected values.
           saveHomeLS(j.home);
+          if (homeLat) homeLat.value = j.home.lat;
+          if (homeLon) homeLon.value = j.home.lon;
+          if (homeLabelInput) homeLabelInput.value = j.home.label || "";
           withMap((M) => M.setHome(j.home));
           render();
         } else {
