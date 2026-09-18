@@ -16,7 +16,7 @@ window.TWMap = (() => {
   let mapEl = null;
   let resizeFn = null;
   let inited = false;
-  let home = { lat: 39.8283, lon: -98.5795, label: "Home (set in UI)" };
+  let home = { lat: 39.8283, lon: -98.5795, label: "Home (set in UI)", source: "assumed_home" };
   let selectedKey = null;
   let onSelectCb = null;
   let onHoverCb = null;
@@ -26,6 +26,8 @@ window.TWMap = (() => {
   const arcObjs = new Map(); // connection key -> stable arc object
   const pointObjs = new Map(); // remote_ip -> stable point object
   let homePointObj = null;
+  let centeredOnHome = false;
+  let userMovedView = false;
   let processFilter = null; // process name string or null (full globe)
   let arcsMembershipSig = "";
   let pointsMembershipSig = "";
@@ -544,6 +546,8 @@ window.TWMap = (() => {
     if (ctrl) {
       ctrl.enableDamping = true;
       applySpin();
+      // A real drag/zoom by the user: stop auto-centering on home for this session.
+      ctrl.addEventListener("start", () => { userMovedView = true; });
     }
 
     setHome(home);
@@ -563,10 +567,23 @@ window.TWMap = (() => {
   }
 
   function setHome(h) {
+    const prev = home;
     home = h || home;
     const label = document.getElementById("home-label");
     if (label) label.textContent = `Home: ${home.label || "set in UI"}`;
     _paint();
+    // #68: the camera was only pointed once at init (the US-center fallback), so a
+    // saved/detected home that arrived a moment later never moved the view. Center on
+    // a real home when it first arrives or when its coordinates change, unless the
+    // user has already dragged the globe this session.
+    const real = home && home.source !== "assumed_home" && home.lat != null && home.lon != null;
+    const moved = !prev || prev.lat !== home.lat || prev.lon !== home.lon;
+    if (globe && real && (moved || !centeredOnHome) && !userMovedView) {
+      try {
+        globe.pointOfView({ lat: home.lat, lng: home.lon, altitude: DEFAULT_ALTITUDE }, centeredOnHome && !document.hidden ? 900 : 0);
+        centeredOnHome = true;
+      } catch (_) {}
+    }
   }
 
   function getHome() {
@@ -874,6 +891,7 @@ window.TWMap = (() => {
     resize,
     setHome,
     getHome,
+    getView: () => (globe && globe.pointOfView ? globe.pointOfView() : null),
     upsert,
     focusIp,
     focusLatLng,
