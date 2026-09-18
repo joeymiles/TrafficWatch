@@ -2702,11 +2702,17 @@
       .then((r) => r.json())
       .then((j) => {
         if (j && j.ok && j.home) {
+          // #68: persist like a manual Save, so the globe re-centers here after restart.
+          saveHomeLS(j.home);
           withMap((M) => M.setHome(j.home));
           render();
+        } else {
+          showToast("Home not detected", "Public IP lookup was unavailable. You can enter lat/lon and Save instead.", { key: "home-detect-fail|" + Date.now(), sev: "info", ttl: 6000 });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        showToast("Home not detected", "Public IP lookup failed. You can enter lat/lon and Save instead.", { key: "home-detect-fail|" + Date.now(), sev: "info", ttl: 6000 });
+      });
   });
   document.getElementById("btn-clear-history")?.addEventListener("click", async () => {
     const yes = await twConfirm(
