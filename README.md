@@ -13,7 +13,7 @@ Still frame: [demo.png](docs/readme/demo.png) · Video: [demo.webm](docs/readme/
 
 ## Why I built this
 
-Local-first, metadata first — paranoid on purpose, pragmatic about it. I wanted a glanceable map of *where* your local PC/Laptop is talking without spinning up a full packet lab or shipping my traffic somewhere else. Connection endpoints, process names, rough geo — enough signal to notice weird outbound paths, not a packet dump. Runs on the box, stays on the box.
+Local-first, metadata first — paranoid on purpose, pragmatic about it. I wanted a glanceable map of *where* my local PC/Laptop is talking without spinning up a full packet lab or shipping my traffic somewhere else. Connection endpoints, process names, rough geo — enough signal to notice weird outbound paths, not a packet dump. Runs on the box, stays on the box.
 
 - Binds `127.0.0.1` only (no LAN expose)
 - No telemetry, no accounts, no cloud sync
