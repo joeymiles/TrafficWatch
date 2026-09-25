@@ -1843,4 +1843,4 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
 
 /* #357 follow-up 3: value boxes are real boxes, not wrapped inline fragments */
 .copy-value { display: inline-block; max-width: 100%; vertical-align: top; box-sizing: border-box; }
-.inspect-meta dd .copy-value { display: block; width: 100%; margin-bottom: 0.25rem; }
+.inspect-meta dd .copy-value { margin-bottom: 0.2rem; }
