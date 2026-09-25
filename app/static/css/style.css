@@ -1831,3 +1831,12 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
 /* #357 follow-up from screenshot review */
 .map-legend .globe-spin { font-family: var(--body); font-size: 0.72rem; letter-spacing: 0.02em; text-transform: none; }
 .copy-value { overflow-wrap: anywhere; }
+
+/* #357 follow-up 2: Joey screenshot review */
+/* Collapsed rail: Michroma is wide, so the rotated title needs a smaller size to fit. */
+.layout.sidebar-collapsed .accordion-toggle h2 { font-size: 0.5rem; letter-spacing: 0.12em; margin-top: 2.6rem; }
+/* Inspect: align the Risk label with the other labels; keep long values inside their box with Copy at the right. */
+.inspect-trust-label { min-width: 7.5rem; margin-right: 0.75rem; }
+.copy-field { flex-wrap: nowrap; align-items: flex-start; }
+.copy-value { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; word-break: normal; }
+.copy-btn, .copy-field .btn-xs { flex: 0 0 auto; margin-top: 0.15rem; }
