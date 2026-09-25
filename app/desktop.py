@@ -54,8 +54,8 @@ _SPLASH_TEMPLATE = """<!DOCTYPE html>
     html, body {{ height: 100%; margin: 0; }}
     body {{
       font-family: "Segoe UI", system-ui, sans-serif;
-      background: radial-gradient(1000px 500px at 30% -10%, #152238 0%, #0b0f17 55%);
-      color: #e6edf7;
+      background: radial-gradient(circle at 70% -10%, rgba(9,140,255,0.09), transparent 55%), #070b0f;
+      color: #edf5fa;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -63,8 +63,8 @@ _SPLASH_TEMPLATE = """<!DOCTYPE html>
     .card {{
       text-align: center;
       padding: 2rem 2.5rem;
-      background: #121826;
-      border: 1px solid #243049;
+      background: #111a22;
+      border: 1px solid rgba(164,204,224,0.3);
       border-radius: 16px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.45);
       max-width: 28rem;
@@ -80,12 +80,12 @@ _SPLASH_TEMPLATE = """<!DOCTYPE html>
       height: 56px;
       display: block;
     }}
-    h1 {{ margin: 0.5rem 0 0.25rem; font-size: 1.25rem; letter-spacing: 0.02em; }}
-    p {{ margin: 0.35rem 0; color: #8b9bb4; font-size: 0.9rem; }}
-    #status {{ color: #5eead4; font-size: 0.85rem; margin-top: 0.75rem; }}
+    h1 {{ margin: 0.5rem 0 0.25rem; font-size: 0.95rem; letter-spacing: 0.14em; text-transform: uppercase; }}
+    p {{ margin: 0.35rem 0; color: #91a1ac; font-size: 0.9rem; }}
+    #status {{ color: #16c5ff; font-size: 0.85rem; margin-top: 0.75rem; }}
     .spin {{
       width: 36px; height: 36px; margin: 1.1rem auto 0;
-      border: 3px solid #243049; border-top-color: #5eead4;
+      border: 3px solid rgba(164,204,224,0.16); border-top-color: #16c5ff;
       border-radius: 50%; animation: tw 0.85s linear infinite;
     }}
     @keyframes tw {{ to {{ transform: rotate(360deg); }} }}
@@ -96,7 +96,7 @@ _SPLASH_TEMPLATE = """<!DOCTYPE html>
     <div class="logo">{logo}</div>
     <h1>TrafficWatch is starting.</h1>
     <p>Loading connections &amp; GeoIP.</p>
-    <p class="tw-motto" style="font-size:0.72rem;color:#6b7c94;margin-top:0.65rem;line-height:1.35;">local-first, metadata first — paranoid on purpose, pragmatic about it.</p>
+    <p class="tw-motto" style="font-size:0.72rem;color:#91a1ac;margin-top:0.65rem;line-height:1.35;">local-first, metadata first — paranoid on purpose, pragmatic about it.</p>
     <div class="spin" aria-hidden="true"></div>
     <p id="status">Opening local server.</p>
   </div>
@@ -139,8 +139,8 @@ def build_splash_html() -> str:
     except Exception:
         logo = (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">'
-            '<rect width="64" height="64" rx="14" fill="#121826" stroke="#5eead4"/>'
-            '<text x="32" y="40" text-anchor="middle" fill="#5eead4" '
+            '<rect width="64" height="64" rx="14" fill="#121826" stroke="#16c5ff"/>'
+            '<text x="32" y="40" text-anchor="middle" fill="#16c5ff" '
             'font-family="Segoe UI,sans-serif" font-size="18">TW</text></svg>'
         )
     return _SPLASH_TEMPLATE.format(logo=logo)
@@ -679,7 +679,7 @@ def main() -> None:
         width=args.width,
         height=args.height,
         min_size=(900, 600),
-        background_color="#0b0f17",
+        background_color="#070b0f",
         js_api=api,
         maximized=not args.fullscreen,
         fullscreen=bool(args.fullscreen),

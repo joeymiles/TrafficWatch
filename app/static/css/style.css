@@ -678,10 +678,10 @@ tbody tr.active {
   z-index: 1000;
   max-width: 22rem;
   padding: 0.55rem 0.7rem;
-  background: rgba(7, 11, 15, 0.95);
-  border: 1px solid var(--border);
+  background: rgba(17, 26, 34, 0.96);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
   pointer-events: none;
   font-size: 0.75rem;
   line-height: 1.35;
@@ -709,10 +709,10 @@ tbody tr.active {
   width: min(640px, 96vw);
   max-height: min(84vh, 820px);
   overflow: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--panel2);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(7, 11, 15, 0.6);
 }
 .modal-head {
   display: flex;
@@ -861,7 +861,7 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
 .boot-card {
   text-align: center;
   padding: 1.75rem 2.25rem;
-  background: var(--panel);
+  background: var(--panel2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -874,7 +874,11 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
 }
 .boot-card h1 {
   margin: 0.55rem 0 0.3rem;
-  font-size: 1.15rem;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 .boot-card p {
   margin: 0.25rem 0;
@@ -882,13 +886,27 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
   font-size: 0.88rem;
 }
 .boot-spin {
-  width: 34px; height: 34px;
-  margin: 1rem auto 0;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: tw-spin 0.85s linear infinite;
+  position: relative;
+  width: 100%;
+  height: 2px;
+  margin: 1.1rem auto 0;
+  border: 0;
+  border-radius: 1px;
+  background: rgba(164, 204, 224, 0.12);
+  overflow: hidden;
 }
+.boot-spin::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: var(--glow) var(--accent);
+  animation: tw-progress 1.4s ease-in-out infinite;
+}
+@keyframes tw-progress { to { left: 100%; } }
 @keyframes tw-spin { to { transform: rotate(360deg); } }
 
 
@@ -1531,10 +1549,10 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
   z-index: 40;
   min-width: 220px;
   padding: 0.55rem 0.65rem;
-  background: var(--panel);
+  background: var(--panel2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -1756,3 +1774,56 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
 .list-tab.active .tab-count { background: rgba(255, 79, 85, 0.16) !important; color: var(--danger) !important; border-color: rgba(255, 79, 85, 0.45); }
 .alert-row.intel-hit { box-shadow: inset 3px 0 0 var(--danger); }
 .alert-why { color: var(--warn); }
+
+
+/* --- #357 overlays and polish ------------------------------------------- */
+.modal { background: rgba(7, 11, 15, 0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.modal-head, .modal-foot { border-color: var(--border); }
+.kill-card .modal-head h2 { color: var(--danger); }
+#kill-confirm-btn,
+#confirm-ok,
+#fw-confirm-btn {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--bg);
+  font-weight: 600;
+  box-shadow: var(--glow) rgba(255, 79, 85, 0.35);
+}
+#kill-confirm-btn:hover, #confirm-ok:hover, #fw-confirm-btn:hover { filter: brightness(1.1); color: var(--bg); }
+.btn.primary { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn.primary:hover { box-shadow: var(--glow) var(--accent-glow); }
+.boot-logo { text-shadow: 0 0 18px var(--accent-glow); }
+
+/* Scrollbars */
+* { scrollbar-width: thin; scrollbar-color: rgba(164, 204, 224, 0.28) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(164, 204, 224, 0.22); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(22, 197, 255, 0.45); background-clip: padding-box; }
+
+/* Focus rings: visible, accent */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.filters input[type="search"]:focus,
+.filters input[type="number"]:focus,
+#kill-confirm-input:focus,
+#fw-confirm-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Reveal: short fade-up, off under reduced motion */
+@keyframes tw-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.modal:not(.hidden) .modal-card { animation: tw-rise 650ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.status-banner, .list-pane { animation: tw-rise 650ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
