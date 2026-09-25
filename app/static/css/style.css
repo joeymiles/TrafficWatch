@@ -1840,3 +1840,7 @@ tbody tr .proc-wrap { display: flex; align-items: flex-start; justify-content: s
 .copy-field { flex-wrap: nowrap; align-items: flex-start; }
 .copy-value { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; word-break: normal; }
 .copy-btn, .copy-field .btn-xs { flex: 0 0 auto; margin-top: 0.15rem; }
+
+/* #357 follow-up 3: value boxes are real boxes, not wrapped inline fragments */
+.copy-value { display: inline-block; max-width: 100%; vertical-align: top; box-sizing: border-box; }
+.inspect-meta dd .copy-value { display: block; width: 100%; margin-bottom: 0.25rem; }
