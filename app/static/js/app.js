@@ -736,6 +736,23 @@
     return String(s).replace(/"/g, '\\"');
   }
 
+  // #357 segmented meters: 0..1 on a log scale, 1 KB/s -> 0, 10 MB/s -> 1.
+  function meterLevel(bytesPerSec) {
+    const n = Number(bytesPerSec) || 0;
+    if (n <= 1024) return 0;
+    return Math.min(1, Math.log10(n / 1024) / 4);
+  }
+  function setMeter(el, level) {
+    if (!el) return;
+    let m = el.querySelector(".tw-meter");
+    if (!m) {
+      m = document.createElement("span");
+      m.className = "tw-meter";
+      m.setAttribute("aria-hidden", "true");
+      el.appendChild(m);
+    }
+    m.style.setProperty("--v", String(Math.max(0, Math.min(1, level)).toFixed(3)));
+  }
   function fmtRate(n) {
     if (n == null || Number.isNaN(n)) return "—";
     if (n < 1024) return `${n.toFixed(0)} B/s`;
@@ -1982,6 +1999,8 @@
           .slice(0, 3)
           .map((t) => `${t.process} (${fmtRate((t.bytes_in_rate || 0) + (t.bytes_out_rate || 0))})`)
           .join(" · ");
+      const top0 = topTalkers[0];
+      setMeter(chipTalkers, meterLevel((top0.bytes_in_rate || 0) + (top0.bytes_out_rate || 0)));
     } else if (window.__twRatesHelperNeeded) {
       chipTalkers.textContent = "rates: helper needed";
       chipTalkers.title = "Per-connection rates need Settings -> Enable live DNS (admin) for helper TCP bytes";
@@ -3390,6 +3409,8 @@
     if (snap && snap.rates) {
       statSysIn.textContent = fmtRate(snap.rates.system_in);
       statSysOut.textContent = fmtRate(snap.rates.system_out);
+      setMeter(statSysIn, meterLevel(snap.rates.system_in));
+      setMeter(statSysOut, meterLevel(snap.rates.system_out));
     }
     if (chipIntel) {
       const n = snap && typeof snap.intel_hits === "number"

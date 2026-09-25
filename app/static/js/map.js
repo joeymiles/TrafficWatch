@@ -42,11 +42,12 @@ window.TWMap = (() => {
   let nightImage = null;
 
   function colorFor(dir, highlight, intelHit) {
-    if (highlight) return "#fbbf24";
-    if (intelHit) return "#fb7185";
-    if (dir === "inbound") return "#f472b6";
-    if (dir === "listen") return "#a78bfa";
-    return "#38bdf8";
+    // Instrument-panel tokens (#357): out cyan, in purple, listen blue, intel red, highlight yellow.
+    if (highlight) return "#ffe016";
+    if (intelHit) return "#ff4f55";
+    if (dir === "inbound") return "#d248ff";
+    if (dir === "listen") return "#078cff";
+    return "#16c5ff";
   }
 
   function loadSpinPref() {
@@ -447,7 +448,7 @@ window.TWMap = (() => {
         .bumpImageUrl(IMG_TOPO)
         .backgroundImageUrl(IMG_SKY)
         .showAtmosphere(true)
-        .atmosphereColor("#4b7bec")
+        .atmosphereColor("#078cff")
         .atmosphereAltitude(0.18)
         .arcsData([])
         .arcColor((d) => d.color)
@@ -636,7 +637,7 @@ window.TWMap = (() => {
   function _dimColor(hex, fade) {
     // fade 0..1 (1 = full). Soften linger arcs without rebuilding objects.
     if (!fade || fade >= 0.99) return hex;
-    const h = String(hex || "#38bdf8").replace("#", "");
+    const h = String(hex || "#16c5ff").replace("#", "");
     if (h.length !== 6) return hex;
     const r = parseInt(h.slice(0, 2), 16);
     const g = parseInt(h.slice(2, 4), 16);
@@ -651,7 +652,7 @@ window.TWMap = (() => {
       homePointObj = {
         lat: home.lat,
         lng: home.lon,
-        color: "#5eead4",
+        color: "#16c5ff",
         isHome: true,
         label: home.label || "Home",
         tip: `<div class="tt"><div class="tt-title">${esc(home.label || "Home")}</div></div>`,
@@ -692,7 +693,7 @@ window.TWMap = (() => {
     for (const p of lastPoints) {
       if (p.isHome) continue;
       p.highlight = p.key === selectedKey || (selectedKey && p.ip && selectedKey.includes(p.ip));
-      const base = p.highlight ? "#fbbf24" : colorFor(p.direction, false, !!p.intelHit);
+      const base = p.highlight ? "#ffe016" : colorFor(p.direction, false, !!p.intelHit);
       p.color = p.lingering ? _dimColor(base, 0.35) : base;
     }
     if (!globe) return;
@@ -848,7 +849,7 @@ window.TWMap = (() => {
       }
       pt.lingering = true;
       pt.highlight = pt.key === selectedKey || (selectedKey && pt.ip && selectedKey.includes(pt.ip));
-      pt.color = _dimColor(pt.highlight ? "#fbbf24" : colorFor(pt.direction, false, !!pt.intelHit), 0.35);
+      pt.color = _dimColor(pt.highlight ? "#ffe016" : colorFor(pt.direction, false, !!pt.intelHit), 0.35);
     }
 
     _rebuildVisible();
