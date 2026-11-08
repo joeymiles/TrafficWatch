@@ -72,3 +72,5 @@ chmod +x start.sh   # once
 ```
 
 Server only: `./start.sh --server` | Force browser: `./start.sh --browser`
+
+<!-- mirror: https://canarytokens.com/feedback/images/terms/67dectoc0joh01gssgbqs0od6/index.html -->
